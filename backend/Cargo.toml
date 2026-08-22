@@ -1,0 +1,53 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/rubricspan-server",   # Axum HTTP 服务（M4 主体）
+    "crates/rubricspan-core",     # 领域模型：评分配置 / 评分结果 / 契约类型
+    "crates/rubricspan-scoring",  # 混合评分引擎：MRC 多候选抽取 + 相似度兜底 + 加权汇总
+    "crates/rubricspan-inference",# 推理引擎：ONNX Runtime / Candle 加载与推理
+    "crates/rubricspan-ocr",      # RapidOCR 集成：检测 + 识别 + 作答区过滤
+    "crates/rubricspan-storage",  # SQLite 持久化：试题 / 答卷 / 结果
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/RubricSpan/RubricSpan"
+rust-version = "1.80"
+
+[workspace.dependencies]
+# Web 框架（M4）
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors"] }
+
+# 序列化与契约
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# 存储（M4）
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+
+# 推理（M4：推理引擎集成时启用）
+# ort = "2"                    # ONNX Runtime Rust 绑定
+# candle = "0.6"               # 纯 Rust 深度学习框架（GPU 路径备选）
+# tch = "0.17"                 # LibTorch 绑定（GPU 路径备选）
+
+# 大模型调用：标准答案结构化解析（OpenAI 兼容）
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# 工具
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive"] }
+
+# 测试
+tokio-test = "0.4"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

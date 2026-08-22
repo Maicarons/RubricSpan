@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  backend:
+    name: Rust 后端（构建 + 测试）
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+      - name: cargo build
+        run: cargo build --workspace --locked
+      - name: cargo test
+        run: cargo test --workspace --locked
+      - name: cargo clippy
+        run: cargo clippy --workspace -- -D warnings
+
+  frontend:
+    name: 前端（类型检查 + 构建）
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: npm install
+        run: npm install
+      - name: typecheck
+        run: npm run typecheck
+      - name: build
+        run: npm run build
+
+  train:
+    name: 训练侧（Python 语法与契约校验）
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: train
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 语法编译检查
+        run: python -m compileall rubricspan_train tests
+      - name: 契约 JSON Schema 合法性校验
+        shell: pwsh
+        run: |
+          $files = @("../contracts/scoring-config.schema.json","../contracts/labeling-schema.json","../contracts/ocr-output.schema.json")
+          foreach ($f in $files) {
+            $null = Get-Content $f -Raw | ConvertFrom-Json
+            Write-Output "OK: $f"
+          }

@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eduhumancheck.local/contracts/labeling-schema.json",
+  "title": "LabelingOutput",
+  "description": "大模型打标输出 Schema：LLM-as-a-Teacher 流水线要求大模型对每条样本输出的严格 JSON 结构（技术方案 §7.3）。对齐后处理据此构造训练数据。",
+  "type": "object",
+  "required": ["question_id", "student_answer", "point_labels"],
+  "additionalProperties": false,
+  "properties": {
+    "question_id": {
+      "type": "string",
+      "description": "试题标识"
+    },
+    "student_answer": {
+      "type": "string",
+      "description": "学生答案原文（用于 extracted_span 的字符级对齐基准）"
+    },
+    "point_labels": {
+      "type": "array",
+      "minItems": 1,
+      "description": "逐得分点标注，顺序与评分配置的 points 一致",
+      "items": {
+        "type": "object",
+        "required": ["point_id", "hit", "hit_type"],
+        "additionalProperties": false,
+        "properties": {
+          "point_id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "hit": {
+            "type": "boolean",
+            "description": "该得分点是否命中"
+          },
+          "hit_type": {
+            "type": "string",
+            "enum": ["exact", "semantic", "miss"],
+            "description": "exact=原文精确命中；semantic=语义等价命中（同义表述）；miss=未命中"
+          },
+          "extracted_span": {
+            "type": "string",
+            "default": "",
+            "description": "命中片段：必须从学生答案原封不动逐字复制；未命中时为空字符串"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "标注置信度；过低将被质检过滤"
+          },
+          "partial_credit": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "semantic 命中时的给分比例（如 0.5 表示半分）；exact 时为 1.0；miss 时省略或为 0"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "可选：标注理由（仅用于人工抽检，不进入训练数据）"
+          }
+        }
+      }
+    },
+    "labeling_meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "打标元信息（流水线附加，非模型输出必需项）",
+      "properties": {
+        "model": { "type": "string", "description": "打标模型标识" },
+        "temperature": { "type": "number" },
+        "self_consistency_votes": {
+          "type": "integer",
+          "description": "自一致性投票次数（>1 表示走了多温度投票）"
+        },
+        "labeled_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

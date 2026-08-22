@@ -1,0 +1,12 @@
+[package]
+name = "rubricspan-core"
+description = "领域模型：评分配置 / 评分结果 / 契约类型（与 contracts/ 保持一致）"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

@@ -1,0 +1,449 @@
+openapi: 3.0.3
+info:
+  title: RubricSpan 主观题阅卷系统
+  description: |
+    前后端接口契约（冻结版）。后端实现须通过基于本文件的契约测试。
+    变更控制见 contracts/README.md。
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+    description: Rust Axum 本地服务（默认）
+
+tags:
+  - name: questions
+    description: 试题管理
+  - name: standard-answer
+    description: 标准答案结构化解析与保存
+  - name: answers
+    description: 答卷提交
+  - name: ocr
+    description: 试卷图片文本识别
+  - name: scoring
+    description: 评分与结果查询
+
+paths:
+  /api/questions:
+    get:
+      tags: [questions]
+      summary: 试题列表
+      parameters:
+        - name: subject
+          in: query
+          schema: { type: string }
+          description: 按学科筛选
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: 试题列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Question" }
+                  total: { type: integer }
+    post:
+      tags: [questions]
+      summary: 新建试题
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QuestionCreate" }
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Question" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /api/standard-answer/parse:
+    post:
+      tags: [standard-answer]
+      summary: 提交自然语言标准答案，解析为结构化评分配置
+      description: |
+        后端调用 OpenAI 兼容接口大模型一次性解析，经 JSON Schema 校验后返回预览。
+        解析结果未确认前不落盘为正式评分配置。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question_id, raw_answer_text]
+              properties:
+                question_id: { type: string }
+                raw_answer_text:
+                  type: string
+                  description: 教师粘贴的自然语言标准答案原文
+      responses:
+        "200":
+          description: 解析成功（待教师预览确认）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, scoring_config]
+                properties:
+                  status:
+                    type: string
+                    enum: [parsed, needs_review]
+                    description: needs_review 表示校验未完全通过，需人工修正
+                  scoring_config: { $ref: "#/components/schemas/ScoringConfig" }
+                  warnings:
+                    type: array
+                    items: { type: string }
+        "422":
+          description: 解析失败或校验不通过，降级为手动编辑
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, message]
+                properties:
+                  status: { type: string, enum: [failed] }
+                  message: { type: string }
+                  partial_config:
+                    description: 半结构化草稿（如有），供前端编辑界面使用
+                    type: object
+
+  /api/standard-answer:
+    put:
+      tags: [standard-answer]
+      summary: 确认/编辑保存评分配置
+      description: 教师预览确认后，将评分配置落盘为 scoring_configs/{question_id}.json
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScoringConfig" }
+      responses:
+        "200":
+          description: 保存成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [question_id, saved_at]
+                properties:
+                  question_id: { type: string }
+                  saved_at: { type: string, format: date-time }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /api/answers:
+    post:
+      tags: [answers]
+      summary: 提交答卷（单份或批量，文本或图片）
+      description: |
+        文本答卷直接入库；图片答卷入库后异步触发 OCR，
+        OCR 结果经前端预览确认后进入评分流程。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question_id, submissions]
+              properties:
+                question_id: { type: string }
+                submissions:
+                  type: array
+                  minItems: 1
+                  items: { $ref: "#/components/schemas/AnswerSubmission" }
+      responses:
+        "202":
+          description: 已受理（图片答卷将异步 OCR）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accepted, answer_ids]
+                properties:
+                  accepted: { type: integer }
+                  answer_ids:
+                    type: array
+                    items: { type: string }
+
+  /api/ocr:
+    post:
+      tags: [ocr]
+      summary: 上传试卷图片，返回作答区识别文本
+      description: 输入图片（multipart），输出 OCR 契约 JSON（见 ocr-output.schema.json）
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [question_id, image]
+              properties:
+                question_id: { type: string }
+                image:
+                  type: string
+                  format: binary
+                  description: 试卷扫描件/照片（jpg/png，单页）
+                answer_region_template:
+                  type: string
+                  description: 可选，作答区坐标模板标识
+      responses:
+        "200":
+          description: 识别成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OcrResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /api/score:
+    post:
+      tags: [scoring]
+      summary: 触发评分，返回逐点明细与总分
+      description: |
+        混合评分链路：MRC 多候选抽取（标准表述 + aliases）→ 置信度判定
+        → 语义相似度兜底 → 加权汇总。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question_id, answer_ids]
+              properties:
+                question_id: { type: string }
+                answer_ids:
+                  type: array
+                  minItems: 1
+                  items: { type: string }
+                override_thresholds:
+                  type: object
+                  description: 可选，临时覆盖评分配置中的阈值
+                  properties:
+                    similarity_high: { type: number }
+                    similarity_low: { type: number }
+      responses:
+        "200":
+          description: 评分完成
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [question_id, results]
+                properties:
+                  question_id: { type: string }
+                  results:
+                    type: array
+                    items: { $ref: "#/components/schemas/ScoreResult" }
+
+  /api/results:
+    get:
+      tags: [scoring]
+      summary: 查询评分结果（支持筛选与导出）
+      parameters:
+        - name: question_id
+          in: query
+          schema: { type: string }
+        - name: class_name
+          in: query
+          schema: { type: string }
+          description: 按班级筛选
+        - name: export
+          in: query
+          schema:
+            type: string
+            enum: [excel, json]
+          description: 指定后返回导出文件而非 JSON 列表
+      responses:
+        "200":
+          description: 结果列表或导出文件
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ScoreResult" }
+                  total: { type: integer }
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+
+components:
+  responses:
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+
+    Question:
+      type: object
+      required: [question_id, content, subject, total_score]
+      properties:
+        question_id: { type: string, example: "Q001" }
+        content: { type: string, description: 题干文本 }
+        subject: { type: string, example: "历史" }
+        total_score: { type: number, example: 5 }
+        standard_answer_text:
+          type: string
+          description: 自然语言标准答案原文（未解析）
+        config_status:
+          type: string
+          enum: [none, pending_review, confirmed]
+          description: 评分配置状态
+        created_at: { type: string, format: date-time }
+
+    QuestionCreate:
+      type: object
+      required: [content, subject, total_score]
+      properties:
+        question_id:
+          type: string
+          description: 可选，缺省由服务端生成
+        content: { type: string }
+        subject: { type: string }
+        total_score: { type: number }
+        standard_answer_text: { type: string }
+
+    ScoringConfig:
+      description: 与 scoring-config.schema.json 一致（以该 Schema 为准）
+      type: object
+      required: [question_id, total_score, points]
+      properties:
+        question_id: { type: string }
+        total_score: { type: number }
+        subject: { type: string }
+        points:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [point_id, point_text, weight]
+            properties:
+              point_id: { type: integer }
+              point_text: { type: string, description: 得分点标准表述 }
+              weight: { type: number, description: 本得分点满分值 }
+              aliases:
+                type: array
+                items: { type: string }
+                description: 等价表述列表（供多候选抽取与相似度匹配）
+        thresholds:
+          type: object
+          properties:
+            similarity_high: { type: number, default: 0.85 }
+            similarity_low: { type: number, default: 0.60 }
+
+    AnswerSubmission:
+      type: object
+      description: 文本与图片二选一
+      properties:
+        student_id: { type: string }
+        class_name: { type: string }
+        answer_text:
+          type: string
+          description: 文本答卷内容（与 image 互斥）
+        image:
+          type: string
+          description: 已上传试卷图片的引用标识（与 answer_text 互斥）
+        source:
+          type: string
+          enum: [text, ocr]
+          default: text
+
+    OcrResult:
+      description: 与 ocr-output.schema.json 一致（以该 Schema 为准）
+      type: object
+      required: [question_id, answer_text, confidence]
+      properties:
+        question_id: { type: string }
+        answer_text:
+          type: string
+          description: 按阅读顺序拼接的完整作答文本
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: 整体识别置信度
+        lines:
+          type: array
+          items:
+            type: object
+            required: [text, score]
+            properties:
+              text: { type: string }
+              box:
+                type: array
+                description: 检测框坐标（四点）
+                items:
+                  type: array
+                  items: { type: number }
+              score:
+                type: number
+                description: 单行识别置信度
+        low_confidence:
+          type: boolean
+          description: 是否含识别存疑片段（提示教师核对）
+
+    PointDetail:
+      type: object
+      required: [point_id, hit_status, point_score]
+      properties:
+        point_id: { type: integer }
+        hit_status:
+          type: string
+          enum: [hit_exact, hit_semantic, partial, miss]
+          description: 精确命中 / 语义命中 / 部分命中 / 未命中
+        matched_alias:
+          type: string
+          description: 命中的候选表述（标准表述或某个 alias）
+        extracted_span:
+          type: string
+          description: 学生答案中命中的原文片段（逐字复制）
+        confidence:
+          type: number
+          description: MRC 抽取置信度（hit_exact 时给出）
+        similarity:
+          type: number
+          description: 余弦相似度（相似度兜底时给出）
+        point_score: { type: number, description: 本点实际得分 }
+        source:
+          type: string
+          enum: [mrc, similarity]
+          description: 本点得分来自哪条路径
+
+    ScoreResult:
+      type: object
+      required: [question_id, total_score, point_details]
+      properties:
+        question_id: { type: string }
+        answer_id: { type: string }
+        student_id: { type: string }
+        total_score: { type: number, description: 题目总得分 }
+        max_score: { type: number, description: 题目满分 }
+        rating:
+          type: string
+          enum: [excellent, good, pass, fail]
+          description: 评级：优秀/良好/及格/不及格
+        point_details:
+          type: array
+          items: { $ref: "#/components/schemas/PointDetail" }
+        ocr_confidence:
+          type: number
+          description: 若答卷来源为图片，附带 OCR 整体置信度
+        scored_at: { type: string, format: date-time }

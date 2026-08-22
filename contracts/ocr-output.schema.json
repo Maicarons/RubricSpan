@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eduhumancheck.local/contracts/ocr-output.schema.json",
+  "title": "OcrResult",
+  "description": "RapidOCR 作答区识别输出契约（技术方案 §8.4）。评分流程直接消费 answer_text；低置信处理依赖 confidence 与 low_confidence 字段。",
+  "type": "object",
+  "required": ["question_id", "answer_text", "confidence"],
+  "additionalProperties": false,
+  "properties": {
+    "question_id": {
+      "type": "string",
+      "description": "试题标识"
+    },
+    "answer_text": {
+      "type": "string",
+      "description": "按阅读顺序（从上到下、从左到右）拼接的完整作答文本"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "整体识别置信度；低于阈值时前端提示教师核对，但不阻断评分"
+    },
+    "lines": {
+      "type": "array",
+      "description": "逐行识别结果（按阅读顺序）",
+      "items": {
+        "type": "object",
+        "required": ["text", "score"],
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "该行识别文本"
+          },
+          "box": {
+            "type": "array",
+            "description": "文本行检测框坐标：四个顶点，每顶点 [x, y]",
+            "items": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": { "type": "number" }
+            }
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "单行识别置信度；低于阈值的行标记为识别存疑"
+          },
+          "low_confidence": {
+            "type": "boolean",
+            "default": false,
+            "description": "该行是否识别存疑（供前端高亮提示人工核对）"
+          }
+        }
+      }
+    },
+    "low_confidence": {
+      "type": "boolean",
+      "default": false,
+      "description": "整体是否含识别存疑片段"
+    },
+    "ocr_meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "识别元信息（可选）",
+      "properties": {
+        "engine": { "type": "string", "description": "OCR 引擎与模型版本" },
+        "source_image": { "type": "string", "description": "原图文件名/标识" },
+        "device": { "type": "string", "enum": ["cuda", "cpu"] },
+        "elapsed_ms": { "type": "number", "description": "识别耗时" }
+      }
+    }
+  }
+}

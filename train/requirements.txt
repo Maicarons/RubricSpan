@@ -1,0 +1,15 @@
+# 环境基线依赖（与 pyproject.toml 保持一致，供 pip install -r 使用）
+# Python 要求 3.10–3.12；PyTorch CUDA 12 版按官方指引用专用索引安装
+openai>=1.40
+torch>=2.3
+transformers>=4.44
+sentence-transformers>=3.0
+datasets>=2.20
+onnx>=1.16
+onnxruntime>=1.18
+optimum>=1.21
+jsonschema>=4.23
+pyyaml>=6.0
+tqdm>=4.66
+scikit-learn>=1.5
+scipy>=1.13

@@ -1,0 +1,29 @@
+[package]
+name = "rubricspan-server"
+description = "Axum HTTP 服务：阅卷系统在线后端主入口（生产首选模式）"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "rubricspan-server"
+path = "src/main.rs"
+
+[dependencies]
+rubricspan-core = { path = "../rubricspan-core" }
+rubricspan-scoring = { path = "../rubricspan-scoring" }
+rubricspan-inference = { path = "../rubricspan-inference" }
+rubricspan-ocr = { path = "../rubricspan-ocr" }
+rubricspan-storage = { path = "../rubricspan-storage" }
+axum = { workspace = true }
+tokio = { workspace = true }
+tower-http = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+clap = { workspace = true }

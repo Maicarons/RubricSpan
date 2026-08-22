@@ -1,0 +1,5 @@
+# Rust 工具链固定：保证团队与 CI 使用一致的编译环境
+# 如需启用 nightly 特性再行调整；当前以 stable 为基线
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]

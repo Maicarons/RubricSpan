@@ -1,0 +1,19 @@
+[package]
+name = "rubricspan-inference"
+description = "推理引擎：ONNX Runtime / Candle 加载 MRC 与相似度模型（RTX 4060 GPU）"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+rubricspan-core = { path = "../rubricspan-core" }
+rubricspan-scoring = { path = "../rubricspan-scoring" }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# M4 启用实际推理依赖（二选一并记录决策，见技术方案 §10.1）：
+# ort = "2"          # ONNX Runtime Rust 绑定（GPU/CPU + INT8）
+# candle / tch       # GPU 路径备选

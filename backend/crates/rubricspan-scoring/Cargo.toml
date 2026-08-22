@@ -1,0 +1,18 @@
+[package]
+name = "rubricspan-scoring"
+description = "混合评分引擎：MRC 多候选抽取 + 语义相似度兜底 + 加权汇总"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+rubricspan-core = { path = "../rubricspan-core" }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }

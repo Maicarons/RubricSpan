@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eduhumancheck.local/contracts/scoring-config.schema.json",
+  "title": "ScoringConfig",
+  "description": "评分配置 JSON Schema：自然语言标准答案经大模型解析后落盘的结构化产物，评分引擎与前端预览共用。字段定义与技术方案 §6.4 一致。",
+  "type": "object",
+  "required": ["question_id", "total_score", "points"],
+  "additionalProperties": false,
+  "properties": {
+    "question_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "试题唯一标识，如 Q001"
+    },
+    "total_score": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "题目满分值；应等于各得分点 weight 之和"
+    },
+    "subject": {
+      "type": "string",
+      "description": "学科，如 历史 / 地理 / 政治"
+    },
+    "points": {
+      "type": "array",
+      "minItems": 1,
+      "description": "得分点列表",
+      "items": {
+        "type": "object",
+        "required": ["point_id", "point_text", "weight"],
+        "additionalProperties": false,
+        "properties": {
+          "point_id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "得分点序号（题内唯一）"
+          },
+          "point_text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "得分点标准表述（用于 MRC 抽取与相似度计算）"
+          },
+          "weight": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "本得分点满分值"
+          },
+          "aliases": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true,
+            "default": [],
+            "description": "等价表述列表（供 MRC 多候选抽取 + 相似度语义匹配）"
+          }
+        }
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "本题相似度阈值（可选，缺省用全局默认 0.85 / 0.60）",
+      "properties": {
+        "similarity_high": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.85,
+          "description": "高阈值：≥ 该值判语义命中，给满分"
+        },
+        "similarity_low": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.6,
+          "description": "低阈值：< 该值判未命中；介于两阈值之间为部分命中"
+        }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "解析元信息（可选）",
+      "properties": {
+        "parsed_by": { "type": "string", "description": "解析模型标识" },
+        "parsed_at": { "type": "string", "format": "date-time" },
+        "confirmed_by_teacher": {
+          "type": "boolean",
+          "default": false,
+          "description": "教师确认标记；未确认的配置不得用于正式评分"
+        }
+      }
+    }
+  }
+}

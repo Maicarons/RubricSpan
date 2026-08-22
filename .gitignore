@@ -1,0 +1,118 @@
+# ============================================================
+# RubricSpan .gitignore
+# 原则：代码与契约入库；数据、模型产物、依赖、构建产物、密钥不入库
+# ============================================================
+
+# ---------- 大文件：数据与模型产物 ----------
+# 数据与模型只保留各目录内的 README / .gitkeep / 模板文件
+data/raw/**
+data/synthetic/**
+data/processed/**
+data/labeling_cache/**
+!data/**/README.md
+!data/**/.gitkeep
+!data/**/*.example
+!data/**/*.example.json
+!data/**/*.template
+
+models/artifacts/**
+models/int8/**
+models/**/*.onnx
+models/**/*.onnx_data
+models/**/*.bin
+models/**/*.ggml
+models/**/*.gguf
+models/**/*.pt
+models/**/*.pth
+models/**/*.safetensors
+models/**/*.vocab
+!models/README.md
+!models/**/.gitkeep
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.venv/
+venv/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.ipynb_checkpoints/
+
+# ---------- Rust ----------
+target/
+Cargo.lock.backup
+
+# ---------- Node / Next.js ----------
+node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.turbo/
+frontend/.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# ---------- WASM 构建产物 ----------
+wasm/pkg/
+wasm/target/
+wasm/dist/
+*.wasm
+
+# ---------- 数据库与本地运行时文件 ----------
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# ---------- 密钥与环境配置（绝不入库） ----------
+.env
+.env.*
+!.env.example
+
+# ---------- OCR / 临时上传 ----------
+uploads/
+tmp/
+temp/
+*.tmp
+
+# ---------- IDE 与编辑器 ----------
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+
+# ---------- 操作系统 ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- 日志 ----------
+*.log
+logs/

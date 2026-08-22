@@ -1,0 +1,32 @@
+# 默认：文本文件自动规范化行尾，检出时按平台转换
+* text=auto
+
+# 明确文本文件
+*.md        text
+*.yaml      text
+*.yml       text
+*.json      text
+*.toml      text
+*.py        text
+*.rs        text
+*.ts        text
+*.tsx       text
+*.js        text
+*.jsx       text
+*.css       text
+*.html      text
+*.sql       text
+*.sh        text eol=lf
+*.ps1       text
+
+# 二进制文件（不做行尾转换）
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.pdf       binary
+*.onnx      binary
+*.bin       binary
+*.gguf      binary
+*.wasm      binary
+*.zip       binary

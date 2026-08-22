@@ -1,0 +1,18 @@
+[package]
+name = "rubricspan-ocr"
+description = "RapidOCR 集成：试卷图片 → 作答区文本（检测 + 作答区过滤 + 识别 + 拼接）"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+rubricspan-core = { path = "../rubricspan-core" }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# M3 启用实际依赖（集成方式二选一，决策记录到 docs/）：
+# ort = "2" + image = "0.25"   # Rust 侧直接加载 RapidOCR ONNX 模型
+# 或内嵌 Python 进程 / RPC 调用本地 RapidOCR 服务
