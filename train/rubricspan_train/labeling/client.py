@@ -5,10 +5,9 @@
 
 - 多端点 fallback 队列：``.env`` 按 ``LLM_ENDPOINT_<n>_{BASE_URL,API_KEY,MODEL[,NAME]}``
   配置多个接入（``n`` 升序即调用优先级），未配置编号端点时回落到旧单端点变量组
-  （OPENAI_BASE_URL / OPENAI_API_KEY / LABELING_MODEL）。调用始终从队列中第一个
-  可用端点开始；某端点单轮重试耗尽后进入冷却（时长逐次翻倍、上限可配），冷却期
-  内被跳过、由后续端点接客；冷却到期由单线程独占探活，成功则流量自动回到队列
-  前部的高优先级端点；
+  （OPENAI_BASE_URL / OPENAI_API_KEY / LABELING_MODEL）。每次调用都从队首端点
+  开始；某端点整轮重试耗尽后自动切到下一个，全部端点失败才抛错（样本进重试
+  队列）。无冷却、不记忆失败：队首端点恢复后，下一次调用立即回到它；
 - 推理模型适配：deepseek-v4-flash 等模型先输出 reasoning_content 再输出 content，
   completion 预算被思考占用。出现 ``content=None`` 且 ``finish_reason=length`` 时，
   按 2 倍递增 max_tokens 重试（上限 ``max_tokens_max``）；
@@ -30,9 +29,6 @@ from typing import Any, Callable, Iterable, Sequence
 
 _FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 _ENDPOINT_RE = re.compile(r"^LLM_ENDPOINT_(\d+)_(BASE_URL|API_KEY|MODEL|NAME)$")
-# 全端点均处于探活窗口时的等待轮数（每轮 2s，覆盖最大探活 TTL 30s）
-_CLAIM_WAIT_ROUNDS = 15
-_CLAIM_WAIT_SECS = 2.0
 
 
 def load_env(env_path: Path) -> dict[str, str]:
@@ -175,7 +171,7 @@ def _default_client_factory(spec: EndpointSpec, timeout: float) -> Any:
 
 
 class _EndpointRuntime:
-    """单端点运行时：独立的 OpenAI 客户端 + 冷却/探活状态（线程安全）。"""
+    """单端点运行时：独立的 OpenAI 客户端（无状态，线程安全）。"""
 
     def __init__(
         self,
@@ -197,44 +193,6 @@ class _EndpointRuntime:
         self.max_tokens_initial = max_tokens_initial
         self.max_tokens_max = max_tokens_max
         self.meter = meter  # 跨端点共享的计量器
-        self._state = threading.Lock()
-        self.consecutive_failures = 0
-        self.disabled_until = 0.0  # time.monotonic 基准；0 表示从未冷却
-
-    # ------------------------------------------------------------------ state
-
-    def available_at(self) -> float:
-        with self._state:
-            return self.disabled_until
-
-    def claim(self, now: float, ttl: float) -> bool:
-        """选取该端点参与本次调用。
-
-        冷却中的端点不可选；有失败史的端点在冷却刚到期时由首个线程独占探活
-        （探活窗口 = ttl），避免并发线程同时砸向刚恢复的端点。健康端点（无
-        失败史）始终可选，不影响正常并发。
-        """
-        with self._state:
-            if now < self.disabled_until:
-                return False
-            if self.consecutive_failures > 0:
-                self.disabled_until = now + ttl
-            return True
-
-    def mark_success(self) -> None:
-        with self._state:
-            self.consecutive_failures = 0
-            self.disabled_until = 0.0
-
-    def mark_failed(self, cooldown_base: float, cooldown_max: float) -> float:
-        """重试耗尽：连败次数 +1，冷却时长指数递增（封顶 cooldown_max）。"""
-        with self._state:
-            self.consecutive_failures += 1
-            cooldown = min(cooldown_base * 2 ** (self.consecutive_failures - 1), cooldown_max)
-            self.disabled_until = time.monotonic() + cooldown
-            return cooldown
-
-    # ------------------------------------------------------------------ calls
 
     def chat_json(
         self,
@@ -293,9 +251,9 @@ class _EndpointRuntime:
 class LLMClient:
     """线程安全的多端点批量 chat 客户端（fallback 队列）。
 
-    队列内端点按配置顺序调用：请求始终落在第一个可用端点上；端点整轮重试
-    耗尽后冷却并被跳过，请求落到下一个端点；冷却到期自动探活，恢复后流量
-    回到队列前部。全部端点失败才向调用方抛 ``LabelCallError``（样本进重试队列）。
+    每次调用都从队首（最高优先级）端点开始；某端点整轮重试耗尽后自动切到
+    下一个，全部端点失败才向调用方抛 ``LabelCallError``（样本进重试队列）。
+    无冷却、不记忆失败：队首端点恢复后，下一次调用立即回到它。
     """
 
     def __init__(
@@ -308,16 +266,12 @@ class LLMClient:
         backoff_base: float = 2.0,
         max_tokens_initial: int = 3072,
         max_tokens_max: int = 8192,
-        fallback_cooldown_secs: float = 60.0,
-        fallback_cooldown_max_secs: float = 600.0,
         client_factory: Callable[[EndpointSpec, float], Any] | None = None,
     ) -> None:
         if not endpoints:
             raise ValueError("at least one endpoint is required")
         self.meter = UsageMeter()
         self.concurrency = concurrency
-        self.fallback_cooldown_secs = fallback_cooldown_secs
-        self.fallback_cooldown_max_secs = fallback_cooldown_max_secs
         self._endpoints = [
             _EndpointRuntime(
                 spec,
@@ -353,25 +307,16 @@ class LLMClient:
             backoff_base=float(ccfg.get("backoff_base_secs", 2.0)),
             max_tokens_initial=int(ccfg.get("max_tokens_initial", 3072)),
             max_tokens_max=int(ccfg.get("max_tokens_max", 8192)),
-            fallback_cooldown_secs=float(ccfg.get("fallback_cooldown_secs", 60)),
-            fallback_cooldown_max_secs=float(ccfg.get("fallback_cooldown_max_secs", 600)),
         )
 
     @property
     def model(self) -> str:
-        """元数据回退值：首个非冷却端点的模型名（精确值见 LLMResponse.source_model）。"""
-        now = time.monotonic()
-        for ep in self._endpoints:
-            if ep.available_at() <= now:
-                return ep.model
+        """元数据回退值：队首端点的模型名（精确值见 LLMResponse.source_model）。"""
         return self._endpoints[0].model
 
     def describe(self) -> str:
         """端点队列一览（优先级从左到右）。"""
         return " -> ".join(f"{ep.spec.name}({ep.model})" for ep in self._endpoints)
-
-    def _claim_ttl(self) -> float:
-        return max(5.0, min(self.fallback_cooldown_secs, 30.0))
 
     # ------------------------------------------------------------------ single
 
@@ -382,38 +327,18 @@ class LLMClient:
         temperature: float = 0.1,
         max_tokens: int | None = None,
     ) -> LLMResponse:
-        """一次调用并解析为 JSON：端点队列 fallback + 单端点内退避重试。"""
+        """一次调用并解析为 JSON：每次都从队首端点开始，失败依次 fallback。"""
         errors: list[str] = []
-        for round_ in range(_CLAIM_WAIT_ROUNDS + 1):
-            now = time.monotonic()
-            eligible = [ep for ep in self._endpoints if ep.available_at() <= now]
-            if not eligible:
-                # 全端点冷却：按序硬试一轮，避免批次停摆（失败样本进重试队列）
-                eligible = list(self._endpoints)
-            tried = False
-            for i, ep in enumerate(eligible):
-                if not ep.claim(now, self._claim_ttl()):
-                    continue  # 冷却刚到期的探活已被其他线程独占
-                tried = True
-                try:
-                    out = ep.chat_json(messages, temperature=temperature, max_tokens=max_tokens)
-                    ep.mark_success()
-                    return out
-                except Exception as e:  # noqa: BLE001 - 该端点整轮重试耗尽 → 冷却并切下一个
-                    cooldown = ep.mark_failed(
-                        self.fallback_cooldown_secs, self.fallback_cooldown_max_secs
-                    )
-                    errors.append(f"{ep.spec.name}({ep.model}): {e}")
-                    nxt = eligible[i + 1].spec.name if i + 1 < len(eligible) else "-"
-                    print(
-                        f"  [client] endpoint '{ep.spec.name}' failed, cooldown {cooldown:.0f}s"
-                        f" -> try '{nxt}'",
-                        flush=True,
-                    )
-            if tried:
-                break  # 真正尝试过且全部失败
-            if round_ < _CLAIM_WAIT_ROUNDS:
-                time.sleep(_CLAIM_WAIT_SECS)  # 其他线程正在探活全部端点，稍后重选
+        for i, ep in enumerate(self._endpoints):
+            try:
+                return ep.chat_json(messages, temperature=temperature, max_tokens=max_tokens)
+            except Exception as e:  # noqa: BLE001 - 该端点整轮重试耗尽 → 切下一个端点
+                errors.append(f"{ep.spec.name}({ep.model}): {e}")
+                nxt = self._endpoints[i + 1].spec.name if i + 1 < len(self._endpoints) else "-"
+                print(
+                    f"  [client] endpoint '{ep.spec.name}' failed -> try '{nxt}'",
+                    flush=True,
+                )
         self.meter.add_failure()
         raise LabelCallError(
             f"all {len(self._endpoints)} endpoints failed: " + " | ".join(errors)

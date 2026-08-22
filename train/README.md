@@ -40,8 +40,8 @@ train/
 M1 运行备注：环境用系统 Python（`train/env.md`）；打标模型为推理模型，
 completion 预算被 reasoning 占用，客户端已适配（`labeling/client.py`）。
 LLM 接入为多端点 fallback 队列：`.env` 配置 `LLM_ENDPOINT_<n>_{BASE_URL,API_KEY,MODEL}`
-（升序即优先级），单端点故障自动冷却切换、恢复自动回切；未配置时兼容旧
-`OPENAI_*` 单端点变量。
+（升序即优先级），每次调用都从队首端点开始，单端点故障自动切下一个、恢复后立即
+回切，无冷却状态；未配置时兼容旧 `OPENAI_*` 单端点变量。
 
 ## 关键约定
 

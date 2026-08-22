@@ -1,8 +1,8 @@
 # M1 打标流水线配置（对应执行计划 M1-1 ~ M1-6）
 # 环境变量（.env）：多端点 fallback 队列 LLM_ENDPOINT_<n>_{BASE_URL,API_KEY,MODEL[,NAME]}
-# （n 升序 = 调用优先级；某端点重试耗尽自动冷却并切下一个，冷却到期探活恢复）；
-# 未配置编号端点时回落到单端点 OPENAI_BASE_URL / OPENAI_API_KEY / LABELING_MODEL；
-# LLM_TIMEOUT_SECS 为全端点共享超时。
+# （n 升序 = 调用优先级；每次调用都从队首端点开始，某端点重试耗尽自动切下一个，
+# 队首端点恢复后下一次调用立即回到它，无冷却）；未配置编号端点时回落到单端点
+# OPENAI_BASE_URL / OPENAI_API_KEY / LABELING_MODEL；LLM_TIMEOUT_SECS 共享。
 
 pipeline:
   # 种子题源（data/raw/sas-bench/ 下文件名去掉 .jsonl）
@@ -12,14 +12,12 @@ pipeline:
   random_seed: 42
 
 client:
-  concurrency: 16           # 并发请求数（8/12 均稳定，打标阶段提到 16）
-  max_attempts: 4           # 单端点内单调用重试次数（429/5xx/超时/JSON 解析失败）
-  backoff_base_secs: 2.0
+  concurrency: 32           # 并发请求数（多端点 fallback；端点排队明显，24→32 试探）
+  max_attempts: 3           # 单端点内单调用重试次数（重试耗尽快速切换下一端点）
+  backoff_base_secs: 1.5
   max_tokens_initial: 3072  # 推理模型：reasoning 占用 completion 预算，需放大
   max_tokens_max: 8192      # content=None(finish=length) 时翻倍重试的上限
   temperature_default: 0.1
-  fallback_cooldown_secs: 60     # 端点整轮重试耗尽后的冷却时长（连败逐次翻倍）
-  fallback_cooldown_max_secs: 600  # 冷却时长上限；到期单线程探活，恢复即回到该端点
 
 parse_points:
   # 参考答案 → 评分配置（得分点拆分 + 权重分配 + 同义别名）
@@ -38,8 +36,9 @@ label:
 
 selfcheck:
   # 自一致性校验（M1-4）：多温度多次调用 + 多数投票
+  # 温度上限注意：opencode x-preview 拒绝 temperature>1.0（上游 400），故用 0.5/0.9
   votes: 3                  # 含首轮流的总票数（=2 表示追加 1 轮）
-  temperatures: [0.7, 1.1]  # 首轮 0.1 之外的追加温度
+  temperatures: [0.5, 0.9]  # 首轮 0.1 之外的追加温度
   max_samples: 400          # 高价值样本上限（semantic 命中或低置信）
   low_confidence: 0.75
 
