@@ -1,0 +1,14 @@
+# M1-7 训练数据划分配置
+# 划分单位 = question_id（同一题的全部样本进入同一 split，防泄漏）
+
+split:
+  seed: 42
+  ratios: { train: 0.8, val: 0.1, test: 0.1 }
+
+mrc:
+  negative_ratio: 0.22      # 无答案负样本目标占比（执行计划要求 ≥20%）
+  max_len_hint: 384         # M2 训练 max_len 提示（构建侧不强截断）
+
+similarity:
+  include_sas_datasets: true  # 并入 SAS-Datasets（ADS/LE/ASAG）真实人工分句对
+  include_stsb_zh: true       # 并入中文 STS-B（0-5 归一到 0-1）

@@ -28,14 +28,20 @@ train/
 
 ## 各模块与里程碑对照
 
-| 模块 | 里程碑 | 入口（规划） | 契约依赖 |
+| 模块 | 里程碑 | 入口 | 契约依赖 |
 |---|---|---|---|
-| `labeling/` | M1 | `python -m rubricspan_train.labeling.run` | `contracts/labeling-schema.json` |
-| `align/` | M1 | 被 labeling 流水线调用；单测覆盖三种匹配策略 | 同上 |
-| `data/` | M1 | `python -m rubricspan_train.data.build` | — |
-| `training/` | M2 | `python -m rubricspan_train.training.train_mrc` / `.train_similarity` | — |
-| `evaluation/` | M2 | `python -m rubricspan_train.evaluation.report` | 技术方案 §13 指标 |
-| `export/` | M2 | `python -m rubricspan_train.export.onnx` | `contracts/model-artifacts.md` |
+| `labeling/` | M1 ✅ | `python -m rubricspan_train.labeling.run {parse-points\|synth\|label\|selfcheck\|quality\|stats}` | `contracts/labeling-schema.json`、`contracts/scoring-config.schema.json` |
+| `align/` | M1 ✅ | 被 labeling/quality 调用；`tests/test_aligner.py` 覆盖三级策略 | 同上 |
+| `data/` | M1 ✅ | `python -m rubricspan_train.data.build` | — |
+| `training/` | M2 | `python -m rubricspan_train.training.train_mrc` / `.train_similarity`（规划） | — |
+| `evaluation/` | M2 | `python -m rubricspan_train.evaluation.report`（规划） | 技术方案 §13 指标 |
+| `export/` | M2 | `python -m rubricspan_train.export.onnx`（规划） | `contracts/model-artifacts.md` |
+
+M1 运行备注：环境用系统 Python（`train/env.md`）；打标模型为推理模型，
+completion 预算被 reasoning 占用，客户端已适配（`labeling/client.py`）。
+LLM 接入为多端点 fallback 队列：`.env` 配置 `LLM_ENDPOINT_<n>_{BASE_URL,API_KEY,MODEL}`
+（升序即优先级），单端点故障自动冷却切换、恢复自动回切；未配置时兼容旧
+`OPENAI_*` 单端点变量。
 
 ## 关键约定
 

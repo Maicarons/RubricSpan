@@ -9,6 +9,7 @@ data/raw/**
 data/synthetic/**
 data/processed/**
 data/labeling_cache/**
+data/scoring_configs/**
 !data/**/README.md
 !data/**/.gitkeep
 !data/**/*.example

@@ -4,11 +4,11 @@
 
 | 子目录 | 内容 |
 |---|---|
-| `raw/` | 原始数据集（北大评测集、SAS-Bench、CMRC 2018、CESA 等，见 `raw/README.md`） |
-| `synthetic/` | 大模型合成的四档水平学生答卷（M1 生成） |
-| `labeling_cache/` | 大模型打标原始输出缓存（M1） |
-| `processed/` | 对齐后训练数据：MRC 五元组 + 相似度句子对（M1 产出） |
-| `scoring_configs/` | 教师确认后的评分配置 JSON（`{question_id}.json`，运行时产出） |
+| `raw/` | 原始数据集（SAS-Bench、SAS-Datasets、CMRC 2018、DRCD、CESA 等，见 `raw/README.md`） |
+| `synthetic/` | 大模型合成的四档水平学生答卷（M1-2 生成） |
+| `labeling_cache/` | 大模型打标中间产物：raw / voted / final 三级（M1-3~M1-6） |
+| `processed/` | 对齐后训练数据：MRC 五元组 + 相似度句子对 + 质检报告（M1 产出） |
+| `scoring_configs/` | 评分配置 JSON：M1 打标种子配置 + 运行时教师确认配置（`{question_id}.json`） |
 
 ## 约定
 

@@ -44,6 +44,22 @@
 | RapidOCR 推理 | `python train/examples/smoke_rapidocr.py`（PATH 加 torch/lib） | PASS：印刷体字符级准确率 100%；GPU 热身后单页 wall≈340–660ms（det≈40–60ms + rec≈200–470ms） |
 | LLM 打标接口 | `python train/examples/smoke_llm_client.py` | PASS：fiblab 端点连通，deepseek-v4-flash-0731 严格 JSON 输出验证通过（188 prompt tok + 82 completion tok，2.2s） |
 
+## M1 环境补充（2026-08-22）
+
+1. **Python 运行时**：流水线使用系统 Python 3.14（M0 冒烟同款）；
+   `train/.venv`（3.12）仅备用，未安装依赖。CI 的 compileall 用 3.12 兼容语法子集。
+2. **打标模型是推理模型**：deepseek-v4-flash-0731 先输出 `reasoning_content`
+   再输出 `content`，且 `thinking`/`reasoning_effort` 关闭参数经 litellm 报 400
+   （不支持）。适配方案（`labeling/client.py`）：
+   - `max_tokens` 初始 3072；`content=None 且 finish_reason=length` 时翻倍重试（上限 8192）；
+   - 实测量级：单次打标约 3~5K tokens（reasoning 占 completion 大头）。
+3. **依赖补充**：PyYAML 6.0.3（configs）；jsonschema/tqdm/numpy 系统环境已有。
+4. **多端点 fallback 队列**（2026-08-22）：`labeling/client.py` 支持端点队列。
+   `.env` 按 `LLM_ENDPOINT_<n>_{BASE_URL,API_KEY,MODEL[,NAME]}` 配置多个接入
+   （`n` 升序 = 优先级），某端点整轮重试耗尽后冷却（60s 起逐次翻倍，上限 600s，
+   见 `configs/labeling.yaml`）并切到下一个端点；冷却到期自动探活恢复。
+   未配置编号端点时回落旧单端点变量组（OPENAI_*），存量配置无需改动。
+
 ## 打标成本估算（M1 参考）
 
 按 smoke 样例实测（188 prompt + 82 completion tokens/次），单条样本打标约 300 tokens。
