@@ -116,3 +116,6 @@ desktop.ini
 # ---------- 日志 ----------
 *.log
 logs/
+
+# ---------- WorkBuddy 本地记忆（不入版本库） ----------
+.workbuddy/
