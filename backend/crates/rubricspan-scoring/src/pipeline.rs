@@ -1,7 +1,7 @@
 //! 评分流水线（技术方案 §12）：多候选抽取 → 置信度判定 → 相似度兜底 → 加权汇总。
 
 use crate::backend::InferenceBackend;
-use crate::result::{HitStatus, PointDetail, Rating, ScoreOutcome, ScoreSource};
+use crate::result::{HitStatus, PointDetail, ScoreOutcome, ScoreSource};
 use crate::{effective_thresholds, rating, DEFAULT_PARTIAL_CREDIT};
 use rubricspan_core::scoring::{ScoringConfig, ScoringPoint};
 
