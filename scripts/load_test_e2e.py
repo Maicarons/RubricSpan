@@ -49,8 +49,11 @@ def http_json(url: str, payload=None, method: str | None = None, timeout: float 
     if method is None:
         method = "POST" if payload is not None else "GET"
     req = urllib.request.Request(url, data=data, method=method, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read().decode())
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"{method} {url} -> {e.code} {e.reason}: {e.read()[:200]}") from e
 
 
 def start_server(args) -> tuple[subprocess.Popen, Path]:
@@ -58,6 +61,8 @@ def start_server(args) -> tuple[subprocess.Popen, Path]:
     env = os.environ.copy()
     env["RUBRICSPAN_MODEL_PRECISION"] = args.precision
     env["RUBRICSPAN_SESSION_POOL"] = str(args.pool)
+    if args.concurrency:
+        env["RUBRICSPAN_INFER_CONCURRENCY"] = str(args.concurrency)
     env_file = tmp / "env"
     env_file.write_text("", encoding="utf-8")
     cmd = [
@@ -131,6 +136,7 @@ def main():
     ap.add_argument("--base-url", default=None)
     ap.add_argument("--precision", default="fp16")
     ap.add_argument("--pool", type=int, default=2)
+    ap.add_argument("--concurrency", type=int, default=None, help="RUBRICSPAN_INFER_CONCURRENCY（默认服务端 4）")
     ap.add_argument("--points", type=int, default=4)
     ap.add_argument("--answers", type=int, default=12)
     ap.add_argument("--oversub", type=int, nargs="+", default=[1, 4, 8, 16])
@@ -144,7 +150,8 @@ def main():
     try:
         base = args.base_url
         if base is None:
-            print(f"=== 自启服务：precision={args.precision} pool={args.pool}（对拍验收档为 fp32，fp16 为 GPU 部署档）===")
+            cc = f" concurrency={args.concurrency}" if args.concurrency else ""
+            print(f"=== 自启服务：precision={args.precision} pool={args.pool}{cc}（对拍验收档为 fp32，fp16/静态int8 为 GPU 部署档）===")
             proc, tmp = start_server(args)
             base = f"http://127.0.0.1:18080"
             print(f"服务就绪：{base}")
