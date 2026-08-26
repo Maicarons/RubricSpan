@@ -5,7 +5,7 @@
 //! - [`labeling`] 对应 `contracts/labeling-schema.json`（打标产物交换格式）
 //! - [`ocr`] 对应 `contracts/ocr-output.schema.json`
 //!
-//! 契约变更须先走 `docs/CHANGELOG-contracts.md` 流程，再同步本模块。
+//! 契约变更须先走 `docs/quality/changelog-contracts.md` 流程，再同步本模块。
 
 pub mod labeling;
 pub mod ocr;
