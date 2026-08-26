@@ -1,6 +1,6 @@
 [package]
 name = "rubricspan-ocr"
-description = "RapidOCR 集成：试卷图片 → 作答区文本（检测 + 作答区过滤 + 识别 + 拼接）"
+description = "RapidOCR 集成：试卷图片 → 作答区文本（检测 + 识别 + 拼接；纯 Rust 推理）"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -13,6 +13,8 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-# M3 启用实际依赖（集成方式二选一，决策记录到 docs/）：
-# ort = "2" + image = "0.25"   # Rust 侧直接加载 RapidOCR ONNX 模型
-# 或内嵌 Python 进程 / RPC 调用本地 RapidOCR 服务
+# M8.1 恢复 OCR（Python 运行时移除后改走 Rust 侧推理）：
+# rapidocr-core = RapidOCR 官方 Rust 核心（内部 ort 2 加载 ONNX；模型缺失自动从 ModelScope 下载）
+# directml feature：Windows 下 DirectX 12 GPU 推理（不依赖 CUDA 运行库）
+rapidocr-core = { version = "0.2.2", features = ["directml"] }
+image = "0.25"
