@@ -12,11 +12,27 @@
 
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::time::Instant;
 
 use anyhow::{anyhow, Context, Result};
 use rubricspan_scoring::backend::{InferenceBackend, MrcOutput, SimilarityOutput};
 use tokenizers::tokenizer::{TruncationDirection, TruncationParams, TruncationStrategy};
 use tokenizers::Tokenizer;
+
+/// `RUBRICSPAN_PROFILE=1` 时输出推理各阶段耗时（perf 剖析用，默认关闭、零开销）。
+fn profiling() -> bool {
+    std::env::var_os("RUBRICSPAN_PROFILE").map(|v| v == "1").unwrap_or(false)
+}
+
+/// 阶段计时包装：`RUBRICSPAN_PROFILE=1` 时以 tracing info 输出 `phase/ms`。
+fn timed<T>(label: &'static str, f: impl FnOnce() -> T) -> T {
+    let t0 = Instant::now();
+    let out = f();
+    if profiling() {
+        tracing::info!(phase = label, ms = t0.elapsed().as_secs_f64() * 1e3, "perf");
+    }
+    out
+}
 
 /// 与训练侧 featurize 一致的序列长度上限。
 const MAX_SEQ_LEN: usize = 512;
@@ -393,28 +409,33 @@ impl OrtBackend {
             return Ok(vec![MrcOutput { has_answer_prob: 0.0, start: 0, end: 0 }; candidates.len()]);
         }
         let n = candidates.len();
-        let feats: Vec<Featurized> = candidates
-            .iter()
-            .map(|c| featurize_pair(&self.mrc, c, context))
-            .collect::<Result<_>>()?;
+        let feats: Vec<Featurized> = timed("mrc.tokenize", || {
+            candidates
+                .iter()
+                .map(|c| featurize_pair(&self.mrc, c, context))
+                .collect::<Result<_>>()
+        })?;
 
-        let mut ids: Vec<i64> = Vec::with_capacity(n * MAX_SEQ_LEN);
-        let mut mask: Vec<i64> = Vec::with_capacity(n * MAX_SEQ_LEN);
-        let mut types: Vec<i64> = Vec::with_capacity(n * MAX_SEQ_LEN);
-        for f in &feats {
-            ids.extend_from_slice(&f.ids);
-            mask.extend_from_slice(&f.mask);
-            types.extend_from_slice(&f.types);
-        }
-        let mut inputs: Vec<(&str, Tensor<i64>)> = vec![
-            ("input_ids", Tensor::from_array(([n, MAX_SEQ_LEN], ids))?),
-            ("attention_mask", Tensor::from_array(([n, MAX_SEQ_LEN], mask))?),
-        ];
-        if self.mrc.has_token_type_ids {
-            inputs.push(("token_type_ids", Tensor::from_array(([n, MAX_SEQ_LEN], types))?));
-        }
+        let inputs: Vec<(&str, Tensor<i64>)> = timed("mrc.tensor", || {
+            let mut ids: Vec<i64> = Vec::with_capacity(n * MAX_SEQ_LEN);
+            let mut mask: Vec<i64> = Vec::with_capacity(n * MAX_SEQ_LEN);
+            let mut types: Vec<i64> = Vec::with_capacity(n * MAX_SEQ_LEN);
+            for f in &feats {
+                ids.extend_from_slice(&f.ids);
+                mask.extend_from_slice(&f.mask);
+                types.extend_from_slice(&f.types);
+            }
+            let mut inputs: Vec<(&str, Tensor<i64>)> = vec![
+                ("input_ids", Tensor::from_array(([n, MAX_SEQ_LEN], ids))?),
+                ("attention_mask", Tensor::from_array(([n, MAX_SEQ_LEN], mask))?),
+            ];
+            if self.mrc.has_token_type_ids {
+                inputs.push(("token_type_ids", Tensor::from_array(([n, MAX_SEQ_LEN], types))?));
+            }
+            Ok::<_, anyhow::Error>(inputs)
+        })?;
         let mut session = self.mrc.acquire();
-        let outputs = session.run(inputs)?;
+        let outputs = timed("mrc.run", || session.run(inputs))?;
         let take = |name: &str| -> Result<Vec<f32>> {
             let (_, data) = outputs
                 .get(name)
@@ -425,15 +446,18 @@ impl OrtBackend {
         let start_logits = take("start_logits")?;
         let end_logits = take("end_logits")?;
 
-        let mut out = Vec::with_capacity(n);
-        for (i, f) in feats.iter().enumerate() {
+        let out = timed("mrc.decode", || {
+            let mut out = Vec::with_capacity(n);
+            for (i, f) in feats.iter().enumerate() {
             let s0 = i * MAX_SEQ_LEN;
             let s_probs = log_softmax_stable(&start_logits[s0..s0 + MAX_SEQ_LEN]);
             let e_probs = log_softmax_stable(&end_logits[s0..s0 + MAX_SEQ_LEN]);
             let (prob, start_char, end_closed) =
                 decode_mrc_span(&f.seq_ids, &f.offsets, &s_probs, &e_probs, context);
-            out.push(MrcOutput { has_answer_prob: prob, start: start_char, end: end_closed });
-        }
+                out.push(MrcOutput { has_answer_prob: prob, start: start_char, end: end_closed });
+            }
+            out
+        });
         Ok(out)
     }
 
@@ -473,19 +497,21 @@ impl OrtBackend {
         if n == 0 {
             return Ok(Vec::new());
         }
-        let encs: Vec<_> = texts
-            .iter()
-            .map(|t| {
-                self.sim
-                    .tokenizer
-                    .encode(t.to_string(), true)
-                    .map_err(|e| anyhow!("分词失败：{e}"))
-            })
-            .collect::<Result<_>>()?;
+        let encs: Vec<_> = timed("sim.tokenize", || {
+            texts.iter()
+                .map(|t| {
+                    self.sim
+                        .tokenizer
+                        .encode(t.to_string(), true)
+                        .map_err(|e| anyhow!("分词失败：{e}"))
+                })
+                .collect::<Result<_>>()
+        })?;
         let len = |i: usize| encs[i].get_ids().len();
         let max_len = (0..n).map(len).max().unwrap_or(1).max(1);
 
-        let mut ids: Vec<i64> = Vec::with_capacity(n * max_len);
+        let (ids, mask, types, pad) = timed("sim.tensor", || {
+            let mut ids: Vec<i64> = Vec::with_capacity(n * max_len);
         let mut mask: Vec<i64> = Vec::with_capacity(n * max_len);
         let mut types: Vec<i64> = Vec::with_capacity(n * max_len);
         let pad = self.sim.pad_id();
@@ -495,31 +521,37 @@ impl OrtBackend {
             ids.resize(ids.len() + (max_len - l), pad);
             mask.extend(enc.get_attention_mask().iter().map(|&x| x as i64));
             mask.resize(mask.len() + (max_len - l), 0);
-            types.extend(enc.get_type_ids().iter().map(|&x| x as i64));
-            types.resize(types.len() + (max_len - l), 0);
-        }
+                types.extend(enc.get_type_ids().iter().map(|&x| x as i64));
+                types.resize(types.len() + (max_len - l), 0);
+            }
+            (ids, mask, types, pad)
+        });
 
-        let mut inputs: Vec<(&str, Tensor<i64>)> = vec![
-            ("input_ids", Tensor::from_array(([n, max_len], ids))?),
-            ("attention_mask", Tensor::from_array(([n, max_len], mask))?),
-        ];
-        if self.sim.has_token_type_ids {
-            inputs.push(("token_type_ids", Tensor::from_array(([n, max_len], types))?));
-        }
+        let inputs: Vec<(&str, Tensor<i64>)> = timed("sim.tensor2", || {
+            let mut inputs: Vec<(&str, Tensor<i64>)> = vec![
+                ("input_ids", Tensor::from_array(([n, max_len], ids))?),
+                ("attention_mask", Tensor::from_array(([n, max_len], mask))?),
+            ];
+            if self.sim.has_token_type_ids {
+                inputs.push(("token_type_ids", Tensor::from_array(([n, max_len], types))?));
+            }
+            Ok::<_, anyhow::Error>(inputs)
+        })?;
         let mut session = self.sim.acquire();
         let out_name = session
             .outputs()
             .first()
             .map(|o| o.name().to_string())
             .ok_or_else(|| anyhow!("相似度模型无输出"))?;
-        let outputs = session.run(inputs)?;
+        let outputs = timed("sim.run", || session.run(inputs))?;
         let (_, data) = outputs
             .get(&out_name)
             .ok_or_else(|| anyhow!("相似度模型缺少输出 {out_name}"))?
             .try_extract_tensor::<f32>()?;
 
         // [n, max_len, SIM_DIM] → 逐行按各自 mask 加权均值池化
-        let mut out = Vec::with_capacity(n);
+        let out = timed("sim.pool", || {
+            let mut out = Vec::with_capacity(n);
         for (i, enc) in encs.iter().enumerate() {
             let real = enc.get_ids().len().min(max_len);
             let denom = real as f64;
@@ -535,8 +567,10 @@ impl OrtBackend {
                     *v /= denom;
                 }
             }
-            out.push(vec);
-        }
+                out.push(vec);
+            }
+            out
+        });
         Ok(out)
     }
 
