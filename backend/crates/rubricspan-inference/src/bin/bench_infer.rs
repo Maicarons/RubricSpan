@@ -8,6 +8,7 @@
 //! 文本取自对拍金标（真实试卷数据），保证各次运行与优化前后可比。
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::{bail, Result};
@@ -52,6 +53,7 @@ fn main() -> Result<()> {
     let mut precision = Precision::Int8;
     let mut force_cpu = false;
     let mut iters = 10usize;
+    let mut threads = 1usize;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -59,6 +61,11 @@ fn main() -> Result<()> {
             "--precision" => precision = args.next().expect("缺参数").parse()?,
             "--force-cpu" => force_cpu = true,
             "--iters" => iters = args.next().expect("缺参数").parse()?,
+            "--pool" => {
+                let n: usize = args.next().expect("缺参数").parse()?;
+                std::env::set_var("RUBRICSPAN_SESSION_POOL", n.to_string());
+            }
+            "--threads" => threads = args.next().expect("缺参数").parse()?,
             other => bail!("未知参数 {other}"),
         }
     }
@@ -86,7 +93,7 @@ fn main() -> Result<()> {
     // 每个答案配 4 个候选点做端到端流水线；批量 MRC 用 8 候选
     let candidates8: Vec<String> = point_texts.iter().take(8).cloned().collect();
 
-    println!("==== 加载模型（precision={precision:?}, force_cpu={force_cpu}）====");
+    println!("==== 加载模型（precision={precision:?}, force_cpu={force_cpu}, pool={}) ====", std::env::var("RUBRICSPAN_SESSION_POOL").unwrap_or_else(|_| "默认".into()));
     let t0 = Instant::now();
     let backend = OrtBackend::load(&models_dir, precision, force_cpu)?;
     println!("加载耗时 {:.1}s", t0.elapsed().as_secs_f64());
@@ -140,6 +147,40 @@ fn main() -> Result<()> {
     summarize("mrc_batch(k=8)", &t_mrc8);
     summarize("similarity x8 (逐条)", &t_sim_legacy);
     summarize("pipeline (4 points)", &t_pipeline);
+
+    // ---- 4. 并发流水线吞吐（--threads M>1 时启用）：M 线程争用同一后端，
+    // 模拟服务端多请求并发；会话池（RUBRICSPAN_SESSION_POOL）应随池增大提升吞吐。----
+    if threads > 1 {
+        let backend = Arc::new(backend);
+        let cfg = Arc::new(config);
+        let ans = Arc::new(answer0);
+        let wall_t0 = Instant::now();
+        std::thread::scope(|s| {
+            for _ in 0..threads {
+                let b = backend.clone();
+                let c = cfg.clone();
+                let a = ans.clone();
+                s.spawn(move || {
+                    for _ in 0..iters {
+                        let _ = pipeline::score_answer_configured(
+                            &c,
+                            &a,
+                            b.as_ref(),
+                            None,
+                            ScoringSettings::default(),
+                        )
+                        .unwrap();
+                    }
+                });
+            }
+        });
+        let wall = wall_t0.elapsed().as_secs_f64();
+        let total = (threads * iters) as f64;
+        println!(
+            "并发流水线（{threads} 线程 × {iters} 次）: wall={wall:.2}s  吞吐={:.2} 题/s",
+            total / wall
+        );
+    }
     Ok(())
 }
 
