@@ -15,6 +15,5 @@ serde_json = { workspace = true }
 # M8.1 启用：SQLite / MySQL 双后端（查询走运行时 API，构建不依赖数据库实例）
 sqlx = { workspace = true }
 async-trait = { workspace = true }
-
-[dev-dependencies]
+# MemoryStorage.flush 的磁盘写在 spawn_blocking 线程池执行，避免阻塞 tokio 工作线程
 tokio = { workspace = true }

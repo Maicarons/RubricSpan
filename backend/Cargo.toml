@@ -21,7 +21,7 @@ rust-version = "1.80"
 # Web 框架（M4）
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
-tower = "0.5"
+tower = { version = "0.5", features = ["limit"] }
 tower-http = { version = "0.6", features = ["trace", "cors"] }
 
 # 序列化与契约
@@ -52,5 +52,5 @@ clap = { version = "4", features = ["derive"] }
 tokio-test = "0.4"
 
 [profile.release]
-lto = "thin"
+lto = "fat"
 codegen-units = 1
