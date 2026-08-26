@@ -51,4 +51,21 @@ pub trait InferenceBackend: Send + Sync {
     /// 计算得分点文本与学生答案整体的余弦相似度。
     fn similarity(&self, point_text: &str, student_answer: &str)
         -> anyhow::Result<SimilarityOutput>;
+
+    /// 批量相似度：同一学生答案对多个得分点文本。
+    ///
+    /// 默认实现逐条调用 [`similarity`](Self::similarity)，语义等价；
+    /// 支持批量的实现可覆盖——学生答案只编码一次、得分点文本合批一次推理。
+    /// 数值一致性依据：余弦基于 attention-mask 加权的均值池化，padding 不改变
+    /// 真实位置的向量，批内按各自 mask 池化与逐条编码严格一致。
+    fn similarity_batch(
+        &self,
+        point_texts: &[String],
+        student_answer: &str,
+    ) -> anyhow::Result<Vec<SimilarityOutput>> {
+        point_texts
+            .iter()
+            .map(|p| self.similarity(p, student_answer))
+            .collect()
+    }
 }

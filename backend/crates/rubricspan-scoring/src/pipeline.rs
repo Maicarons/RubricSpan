@@ -132,16 +132,23 @@ pub fn score_answer_configured(
     }
 
     // ---- 第 2 阶段：相似度兜底统一放在全部 MRC 之后——输入为掩掉所有已认领
-    // 片段后的文本，任何点认领的内容都不会再抬升其他点的相似度。----
+    // 片段后的文本，任何点认领的内容都不会再抬升其他点的相似度。
+    // 学生答案只编码一次、全部剩余得分点合批推理（实现不支持批量时逐条等价）。----
     let final_masked = mask_credited(student_answer, &mrc_credited);
-    for (idx, point) in config.points.iter().enumerate() {
-        if details[idx].is_some() {
-            continue;
+    let remaining: Vec<(usize, &ScoringPoint)> = config
+        .points
+        .iter()
+        .enumerate()
+        .filter(|(idx, _)| details[*idx].is_none())
+        .collect();
+    if !remaining.is_empty() {
+        let texts: Vec<String> = remaining.iter().map(|(_, p)| p.point_text.clone()).collect();
+        let sims = backend.similarity_batch(&texts, &final_masked)?;
+        for ((idx, point), sim) in remaining.into_iter().zip(sims) {
+            let detail = detail_from_similarity(point, sim.cosine, &thresholds, settings.partial_credit);
+            total += detail.point_score;
+            details[idx] = Some(detail);
         }
-        let detail =
-            score_point_similarity(point, &final_masked, &thresholds, settings.partial_credit, backend)?;
-        total += detail.point_score;
-        details[idx] = Some(detail);
     }
     let details = details.into_iter().map(Option::unwrap).collect::<Vec<_>>();
 
@@ -215,33 +222,31 @@ fn score_point_mrc(
     Ok(None)
 }
 
-/// 单个得分点第 2 阶段：相似度兜底（得分点整句 vs 掩码后答案全文的余弦，无片段证据）。
-fn score_point_similarity(
+/// 相似度兜底的阈值判定与给分映射（第 2 阶段批推理后逐点套用）。
+fn detail_from_similarity(
     point: &ScoringPoint,
-    student_answer: &str,
+    cosine: f64,
     thresholds: &rubricspan_core::scoring::Thresholds,
     partial_credit: f64,
-    backend: &dyn InferenceBackend,
-) -> anyhow::Result<PointDetail> {
-    let sim = backend.similarity(&point.point_text, student_answer)?;
-    let (status, score) = if sim.cosine >= thresholds.similarity_high {
+) -> PointDetail {
+    let (status, score) = if cosine >= thresholds.similarity_high {
         (HitStatus::HitSemantic, point.weight)
-    } else if sim.cosine >= thresholds.similarity_low {
+    } else if cosine >= thresholds.similarity_low {
         (HitStatus::Partial, point.weight * partial_credit)
     } else {
         (HitStatus::Miss, 0.0)
     };
 
-    Ok(PointDetail {
+    PointDetail {
         point_id: point.point_id,
         hit_status: status,
         matched_alias: None,
         extracted_span: None,
         confidence: None,
-        similarity: Some(sim.cosine),
+        similarity: Some(cosine),
         point_score: score,
         source: ScoreSource::Similarity,
-    })
+    }
 }
 
 #[cfg(test)]
