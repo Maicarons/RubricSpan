@@ -10,6 +10,7 @@ export default defineConfig({
   head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }]],
   themeConfig: {
     nav: [
+      { text: '入门', link: '/guides/getting-started' },
       { text: '技术方案', link: '/project/plan' },
       { text: '执行计划', link: '/project/execution-plan' },
       { text: '里程碑', link: '/milestones/milestone-m7-review' },
@@ -20,6 +21,12 @@ export default defineConfig({
         items: [
           { text: '技术方案（计划书）', link: '/project/plan' },
           { text: '执行计划', link: '/project/execution-plan' },
+        ],
+      },
+      {
+        text: '上手',
+        items: [
+          { text: '入门教程 · 快速开始', link: '/guides/getting-started' },
         ],
       },
       {

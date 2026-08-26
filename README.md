@@ -40,7 +40,7 @@ RubricSpan/
 
 ## 快速开始
 
-> 环境基线：≥8GB 显存 NVIDIA GPU + CUDA 12、Python 3.10+、Rust stable、Node.js 20+
+> 环境基线：Rust stable 工具链、Node.js 20+、Python 3.10+（仅训练需要）；可选 NVIDIA GPU 用于推理加速。
 
 ### 后端（Rust 在线服务）
 
