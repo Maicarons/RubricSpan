@@ -1,4 +1,4 @@
-"""M0-6 smoke test: RapidOCR local inference on RTX 4060 (GPU via ONNX Runtime CUDA EP).
+"""M0-6 smoke test: RapidOCR local inference on NVIDIA GPU (via ONNX Runtime CUDA EP).
 
 Generates a printed-text exam-style image, runs detection + recognition,
 computes character-level accuracy against ground truth.
