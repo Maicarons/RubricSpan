@@ -1,6 +1,6 @@
 # RubricSpan · 阅微 —— 主观题阅卷教师模型
 
-> 面向中文主观题（文科简答题 / 论述题 / 材料解析题）的**本地化智能阅卷系统**：大模型离线生成训练标签，训练轻量编码器模型，在 RTX 4060（8GB）普通 PC 上完成"上传试卷 → 作答识别 → 自动评分 → 审阅反馈"闭环。
+> 面向中文主观题（文科简答题 / 论述题 / 材料解析题）的**本地化智能阅卷系统**：大模型离线生成训练标签，训练轻量编码器模型，在 8GB 显存级普通 PC 上完成"上传试卷 → 作答识别 → 自动评分 → 审阅反馈"闭环。
 
 ## 核心特性
 
@@ -8,7 +8,7 @@
 - **本地可运行**：评分链路全程本地推理，不依赖在线大模型
 - **同义答案识别**：等价表述扩展（aliases）+ 语义相似度兜底，正确处理"戊戌变法 / 百日维新 / 维新运动"类答案
 - **自然语言标准答案**：教师粘贴自然语言评分说明，自动解析为结构化评分配置
-- **纸质试卷接入**：RapidOCR 本地识别试卷扫描件 / 照片为作答文本
+- **纸质试卷接入**：扫描件 / 照片 OCR 识别（RapidOCR PP-OCRv6 · Rust 侧推理，M8.1 恢复；模型首次启动自动下载）
 - **双后端模式**：Rust + GPU 在线服务（生产首选）与 WASM 浏览器离线演示（备选）
 
 ## 技术栈
@@ -16,12 +16,12 @@
 | 层级 | 选型 |
 |---|---|
 | 前端 | React 19 + Next.js 15（App Router）+ Radix UI + Tailwind CSS |
-| 后端（在线） | Rust + Axum + ONNX Runtime / Candle（RTX 4060 GPU） |
+| 后端（在线） | Rust 全栈：Axum 网关 + ort（ONNX Runtime）原生推理，单二进制无 Python（GPU/CPU EP 可选） |
 | 后端（离线） | 轻量模型 + WASM（浏览器内推理） |
 | 模型 | `Langboat/mengzi-bert-base`（MRC 抽取）+ `shibing624/text2vec-base-chinese`（相似度兜底） |
-| 文本识别 | RapidOCR（ONNX Runtime，本地 GPU/CPU） |
-| 训练 | Python + PyTorch + Transformers / Sentence-Transformers |
-| 存储 | SQLite + 本地文件系统 |
+| 文本识别 | RapidOCR（PP-OCRv6 · Rust 侧推理，M8.1 恢复；Python 仅用于训练） |
+| 训练 | Python + PyTorch + Transformers / Sentence-Transformers（仅训练侧，推理已全部 Rust 化） |
+| 存储 | SQLite（本地测试/单机）/ MySQL（生产）/ Memory（临时兼容） |
 
 ## 仓库结构
 
@@ -40,7 +40,7 @@ RubricSpan/
 
 ## 快速开始
 
-> 环境基线：RTX 4060 + CUDA 12、Python 3.10+、Rust stable、Node.js 20+
+> 环境基线：≥8GB 显存 NVIDIA GPU + CUDA 12、Python 3.10+、Rust stable、Node.js 20+
 
 ### 后端（Rust 在线服务）
 
@@ -68,16 +68,26 @@ pip install -r requirements.txt
 
 ## 文档索引
 
+文档统一由 [VitePress](https://vitepress.dev) 站点管理，通过 GitHub Pages 自动部署（见 `.github/workflows/docs.yml`）。
+
 | 文档 | 说明 |
 |---|---|
-| [主观题阅卷教师模型项目计划](主观题阅卷教师模型项目计划.md) | 技术方案（v4）：架构、算法、训练、双后端、OCR、指标与风险 |
-| [主观题阅卷教师模型-项目执行计划](主观题阅卷教师模型-项目执行计划.md) | 执行计划：里程碑、WBS、验收标准、风险登记册 |
-| [contracts/](contracts/README.md) | 接口与数据契约（冻结后变更走 [变更记录](docs/CHANGELOG-contracts.md)） |
-| [docs/bad-cases.md](docs/bad-cases.md) | bad case 登记（迭代闭环入口） |
+| [技术方案（计划书）](docs/project/plan.md) | 技术方案（v4）：架构、算法、训练、双后端、OCR、指标与风险 |
+| [执行计划](docs/project/execution-plan.md) | 执行计划：里程碑、WBS、验收标准、风险登记册 |
+| [后端指南](docs/guides/guide-backend.md) / [前端指南](docs/guides/guide-frontend.md) / [训练指南](docs/guides/guide-training.md) | 三大组件的构建、结构与约定（组件目录内 README 为指针） |
+| [部署与运行手册](docs/guides/deployment.md) | 在线/离线/训练三种模式的部署步骤与环境陷阱 |
+| [全链路评估报告](docs/reports/m7-eval-report.md) | 系统级 §13 指标实测与调优实验结论 |
+| [VitePress 文档站](https://maicarons.github.io/RubricSpan/) | 部署后的在线文档（构建产物，详见 `docs/`） |
+| [contracts/](contracts/README.md) | 接口与数据契约（冻结后变更走 [变更记录](docs/quality/changelog-contracts.md)） |
+| [docs/quality/bad-cases.md](docs/quality/bad-cases.md) | bad case 登记（迭代闭环入口） |
 
 ## 里程碑
 
-数据与环境 → 大模型打标 → 模型训练与导出 → OCR 集成 → Rust 在线后端 → 前端开发 → WASM 离线备选 → 联调评估与交付（共 13 周，详见执行计划 §3）
+数据与环境 → 大模型打标 → 模型训练与导出 → OCR 集成 → Rust 在线后端 → 前端开发 → WASM 离线备选 → 联调评估与交付（共 13 周，详见执行计划 §3）。
+
+当前进度：**M0–M8 完成**。M8 将推理栈去 Python 化：ort + tokenizers 原生实现与旧运行时金标对拍（53 MRC + 180 相似度逐位一致），e2e 指标零回退后删除 `backend/runtime/`，交付物收敛为单个 Rust 二进制。交付 FP32+INT8 双模型（ONNX）、Rust 在线服务、WASM 浏览器离线演示与完整训练/评估工具链。[全链路评估报告](docs/reports/m7-eval-report.md)：系统级 ScoreCorr **0.959**（目标 ≥0.85 ✅）、等价给分率 **97.4%**（目标 ≥80% ✅）；Point-Acc 78.4%（受金标口径分歧影响，34 条仲裁清单见 [arbitration-sheet](docs/reports/arbitration-sheet.md)）与模型级 EM/F1 经评审裁剪至迭代闭环（[M7 评审](docs/milestone-m7-review.md)）。
+
+浏览器离线单题评分演示：启动前端后访问 `/offline`（[使用说明](docs/guides/wasm-offline.md)）；部署细节见[部署与运行手册](docs/guides/deployment.md)。
 
 ## 许可证
 
