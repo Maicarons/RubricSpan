@@ -18,6 +18,10 @@ data/scoring_configs/**
 
 models/artifacts/**
 models/int8/**
+models/backbone/**
+models/mrc/tokenizer/**
+models/similarity/tokenizer/**
+models/wasm/tokenizer/**
 models/**/*.onnx
 models/**/*.onnx_data
 models/**/*.bin
@@ -82,6 +86,9 @@ wasm/pkg/
 wasm/target/
 wasm/dist/
 *.wasm
+# M6：前端静态资产由 scripts/m6_wasm_build.sh 再生（含数百 MB 模型，绝不入库）
+frontend/public/wasm/
+.playwright-mcp/
 
 # ---------- 数据库与本地运行时文件 ----------
 *.db
@@ -90,6 +97,12 @@ wasm/dist/
 *.db-shm
 *.sqlite
 *.sqlite3
+# 后端 JSON 存储的运行时状态（服务启动再生）
+data/store.json
+# 运行时评分参数（管理后台可调，持久化于 store 目录，服务启动再生）
+data/scoring_settings.json
+# 运行时备份文件（如 store.json.m8bak 等）
+data/store.json.*
 
 # ---------- 密钥与环境配置（绝不入库） ----------
 .env
@@ -120,3 +133,10 @@ logs/
 
 # ---------- WorkBuddy 本地记忆（不入版本库） ----------
 .workbuddy/
+
+# OCR 模型产物（RapidOCR PP-OCRv6，首次启动自动从 ModelScope 下载）
+models/ocr/**
+!models/ocr/README.md
+
+# ---------- 本地代理/助手工作区 ----------
+.zcode/
