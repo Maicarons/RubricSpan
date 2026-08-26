@@ -1,0 +1,8 @@
+kind,sample_id,question_id,point_id,point_text,action,old_hit,new_hit,span,align
+arbitration,Chinese_ShortAns_226#full,SAS-CHN-075,2,不是有了兴趣和好成绩毕业后也就一定能很好地适应社会需要,->hit,False,True,并不是所有工科生都能找到合适的工作,exact
+conflict,Political_ShortAns_131#s0,SAS-POL-033,1,宪法修改坚持党的领导、人民当家作主、依法治国有机统一,unify->hit,False,True,这些举措共同彰显了中国特色社会主义民主政治的独特优势,130-156
+conflict,Political_ShortAns_131#s0,SAS-POL-033,2,人民当家作主是社会主义民主政治的本质特征（本质和核心）,unify->hit,False,True,保障了人民群众的知情权和参与权,79-94
+conflict,Political_ShortAns_131#s0,SAS-POL-033,5,宪法是党的主张和人民意志的集中体现，经法定程序上升为国家意志,unify->hit,False,True,遵循了法定程序,111-118
+conflict,Geography_ShortAns_44#s0,SAS-GEO-012,3,土地干燥，土壤蒸发到空气中的水汽减少,unify->hit,False,True,土壤的水分流失更加严重,72-83
+conflict,Geography_ShortAns_44#full,SAS-GEO-012,4,橡胶树保持水土、涵养水源能力差，影响生态和气候,unify->hit,False,True,使得土壤的水分流失更加严重,70-83
+conflict,History_ShortAns_282#full,SAS-HIST-071,4,洋务运动学习西方先进技术，开启中国经济、军事、外交、教育近代化，但未使中国富强,unify->hit,False,True,洋务运动虽然试图引入些西方技艺，却没能真正改变中国的命运,203-231
