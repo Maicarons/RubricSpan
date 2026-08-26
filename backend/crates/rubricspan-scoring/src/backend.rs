@@ -33,6 +33,21 @@ pub trait InferenceBackend: Send + Sync {
     /// - `student_answer`：学生答案全文
     fn mrc_extract(&self, candidate: &str, student_answer: &str) -> anyhow::Result<MrcOutput>;
 
+    /// 批量 MRC 抽取：同一学生答案上的多个候选。
+    ///
+    /// 默认实现逐条调用 [`mrc_extract`](Self::mrc_extract)，语义等价；
+    /// 支持批量的实现可覆盖以复用同 context 的一次批量编码/推理（M8 性能优化）。
+    fn mrc_extract_batch(
+        &self,
+        candidates: &[String],
+        student_answer: &str,
+    ) -> anyhow::Result<Vec<MrcOutput>> {
+        candidates
+            .iter()
+            .map(|c| self.mrc_extract(c, student_answer))
+            .collect()
+    }
+
     /// 计算得分点文本与学生答案整体的余弦相似度。
     fn similarity(&self, point_text: &str, student_answer: &str)
         -> anyhow::Result<SimilarityOutput>;
