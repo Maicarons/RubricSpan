@@ -1,0 +1,19 @@
+[package]
+name = "rubricspan-wasm"
+description = "浏览器离线评分入口（M6 · 方案 B）：混合评分核心的 wasm-bindgen 封装"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+# cdylib 供 wasm-bindgen 产出 .wasm；rlib 使本 crate 可在宿主机跑单元测试
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+rubricspan-core = { path = "../rubricspan-core" }
+rubricspan-scoring = { path = "../rubricspan-scoring" }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+# 版本必须与构建所用 wasm-bindgen-cli 完全一致（当前 0.2.125）
+wasm-bindgen = "=0.2.125"
