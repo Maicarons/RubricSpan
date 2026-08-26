@@ -46,16 +46,21 @@ pub struct AppState {
 
 /// 构建完整路由表。
 pub fn router(state: AppState) -> Router {
+    let infer_concurrency = std::env::var("RUBRICSPAN_INFER_CONCURRENCY")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .unwrap_or(4)
+        .clamp(1, 32);
     Router::new()
         .route("/api/questions", get(list_questions).post(create_question))
         .route("/api/standard-answer/parse", post(parse_standard_answer))
         .route("/api/standard-answer", put(save_standard_answer).get(get_standard_answer))
         .route("/api/answers", post(submit_answers).get(list_answers))
-        // 推理型端点加并发限制：模型会话为互斥串行资源，超发只会把请求堆在
-        // spawn_blocking 线程池里空转（占满阻塞线程池还会饿死其他端点）。
-        // 限制=4 允许少量缓冲排队，同时保证队列有界、公平。
-        .route("/api/ocr", post(run_ocr).layer(tower::limit::ConcurrencyLimitLayer::new(4)))
-        .route("/api/score", post(score).layer(tower::limit::ConcurrencyLimitLayer::new(4)))
+        // 推理型端点加并发限制：模型会话为受限并发资源（配合 RUBRICSPAN_SESSION_POOL），
+        // 超发只会把请求堆在 spawn_blocking 线程池里空转（占满阻塞线程池还会饿死
+        // 其他端点）。限制可调：RUBRICSPAN_INFER_CONCURRENCY（默认 4），保证队列有界、公平。
+        .route("/api/ocr", post(run_ocr).layer(tower::limit::ConcurrencyLimitLayer::new(infer_concurrency)))
+        .route("/api/score", post(score).layer(tower::limit::ConcurrencyLimitLayer::new(infer_concurrency)))
         .route("/api/results", get(query_results))
         .route("/api/health", get(health))
         .route("/api/admin/stats", get(admin_stats))
