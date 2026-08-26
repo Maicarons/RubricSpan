@@ -166,6 +166,13 @@ pub trait Storage: Send + Sync {
     async fn get_answer(&self, id: &str) -> Option<Answer>;
     async fn list_answers(&self, question_id: Option<&str>) -> Vec<Answer>;
     async fn save_result(&self, r: ScoreRecord) -> Result<()>;
+    /// 批量保存评分结果：单事务内完成全部覆盖写（评分批量落盘用，减少事务/fsync 次数）。
+    async fn save_results(&self, records: Vec<ScoreRecord>) -> Result<()> {
+        for r in records {
+            self.save_result(r).await?;
+        }
+        Ok(())
+    }
     async fn list_results(&self, question_id: Option<&str>, class_name: Option<&str>) -> Vec<ScoreRecord>;
     async fn save_ocr(&self, qid: &str, r: OcrResult) -> Result<()>;
     async fn get_ocr(&self, qid: &str) -> Option<OcrResult>;
@@ -199,12 +206,14 @@ impl MemoryStorage {
         Self { inner: Mutex::new(inner), path }
     }
 
-    fn flush(&self) {
-        if let Some(p) = &self.path {
-            if let Ok(s) = serde_json::to_string_pretty(&*self.inner.lock().unwrap()) {
-                let _ = std::fs::write(p, s);
-            }
-        }
+    /// 落盘：序列化在锁内完成（内存态一致快照），磁盘写在阻塞线程池执行，
+    /// 避免阻塞 tokio 工作线程（Memory 仅演示路径，主路径走 SQL 后端）。
+    async fn flush(&self) {
+        let Some(p) = &self.path else { return };
+        let snapshot = serde_json::to_string_pretty(&*self.inner.lock().unwrap());
+        let Ok(snapshot) = snapshot else { return };
+        let p = p.clone();
+        let _ = tokio::task::spawn_blocking(move || std::fs::write(p, snapshot)).await;
     }
 }
 
@@ -212,7 +221,7 @@ impl MemoryStorage {
 impl Storage for MemoryStorage {
     async fn save_question(&self, q: Question) -> Result<()> {
         self.inner.lock().unwrap().questions.insert(q.question_id.clone(), q);
-        self.flush();
+        self.flush().await;
         Ok(())
     }
     async fn list_questions(&self, subject: Option<&str>) -> Vec<Question> {
@@ -227,13 +236,14 @@ impl Storage for MemoryStorage {
         self.inner.lock().unwrap().questions.get(id).cloned()
     }
     async fn save_config(&self, cfg: &ScoringConfig, status: ConfigStatus) -> Result<()> {
-        let mut s = self.inner.lock().unwrap();
-        s.configs.insert(cfg.question_id.clone(), cfg.clone());
-        if let Some(q) = s.questions.get_mut(&cfg.question_id) {
-            q.config_status = status;
+        {
+            let mut s = self.inner.lock().unwrap();
+            s.configs.insert(cfg.question_id.clone(), cfg.clone());
+            if let Some(q) = s.questions.get_mut(&cfg.question_id) {
+                q.config_status = status;
+            }
         }
-        drop(s);
-        self.flush();
+        self.flush().await;
         Ok(())
     }
     async fn get_config(&self, id: &str) -> Option<ScoringConfig> {
@@ -241,7 +251,7 @@ impl Storage for MemoryStorage {
     }
     async fn save_answer(&self, a: Answer) -> Result<()> {
         self.inner.lock().unwrap().answers.insert(a.answer_id.clone(), a);
-        self.flush();
+        self.flush().await;
         Ok(())
     }
     async fn get_answer(&self, id: &str) -> Option<Answer> {
@@ -257,7 +267,17 @@ impl Storage for MemoryStorage {
     }
     async fn save_result(&self, r: ScoreRecord) -> Result<()> {
         self.inner.lock().unwrap().results.insert(r.answer_id.clone(), r);
-        self.flush();
+        self.flush().await;
+        Ok(())
+    }
+    async fn save_results(&self, records: Vec<ScoreRecord>) -> Result<()> {
+        {
+            let mut s = self.inner.lock().unwrap();
+            for r in &records {
+                s.results.insert(r.answer_id.clone(), r.clone());
+            }
+        }
+        self.flush().await;
         Ok(())
     }
     async fn list_results(&self, question_id: Option<&str>, class_name: Option<&str>) -> Vec<ScoreRecord> {
@@ -271,7 +291,7 @@ impl Storage for MemoryStorage {
     }
     async fn save_ocr(&self, qid: &str, r: OcrResult) -> Result<()> {
         self.inner.lock().unwrap().ocr.insert(qid.to_string(), r);
-        self.flush();
+        self.flush().await;
         Ok(())
     }
     async fn get_ocr(&self, qid: &str) -> Option<OcrResult> {

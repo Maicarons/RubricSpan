@@ -396,6 +396,32 @@ macro_rules! impl_storage_sql {
                 Ok(())
             }
 
+            async fn save_results(&self, records: Vec<ScoreRecord>) -> Result<()> {
+                let mut tx = self.pool.begin().await?;
+                for r in &records {
+                    sqlx::query("DELETE FROM results WHERE answer_id = ?")
+                        .bind(&r.answer_id)
+                        .execute(&mut *tx)
+                        .await?;
+                    sqlx::query(&format!(
+                        "INSERT INTO results ({R_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    ))
+                    .bind(&r.answer_id)
+                    .bind(&r.question_id)
+                    .bind(r.student_id.clone())
+                    .bind(r.class_name.clone())
+                    .bind(r.total_score)
+                    .bind(r.max_score)
+                    .bind(&r.rating)
+                    .bind(serde_json::to_string(&r.point_details)?)
+                    .bind(r.ocr_confidence)
+                    .execute(&mut *tx)
+                    .await?;
+                }
+                tx.commit().await?;
+                Ok(())
+            }
+
             async fn list_results(&self, question_id: Option<&str>, class_name: Option<&str>) -> Vec<ScoreRecord> {
                 let mut sql = format!("SELECT {R_COLUMNS} FROM results");
                 let mut conds: Vec<&str> = Vec::new();
