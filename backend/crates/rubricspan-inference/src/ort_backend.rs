@@ -510,21 +510,21 @@ impl OrtBackend {
         let len = |i: usize| encs[i].get_ids().len();
         let max_len = (0..n).map(len).max().unwrap_or(1).max(1);
 
-        let (ids, mask, types, pad) = timed("sim.tensor", || {
+        let (ids, mask, types) = timed("sim.tensor", || {
+            let pad = self.sim.pad_id();
             let mut ids: Vec<i64> = Vec::with_capacity(n * max_len);
-        let mut mask: Vec<i64> = Vec::with_capacity(n * max_len);
-        let mut types: Vec<i64> = Vec::with_capacity(n * max_len);
-        let pad = self.sim.pad_id();
-        for enc in &encs {
-            let l = enc.get_ids().len();
-            ids.extend(enc.get_ids().iter().map(|&x| x as i64));
-            ids.resize(ids.len() + (max_len - l), pad);
-            mask.extend(enc.get_attention_mask().iter().map(|&x| x as i64));
-            mask.resize(mask.len() + (max_len - l), 0);
+            let mut mask: Vec<i64> = Vec::with_capacity(n * max_len);
+            let mut types: Vec<i64> = Vec::with_capacity(n * max_len);
+            for enc in &encs {
+                let l = enc.get_ids().len();
+                ids.extend(enc.get_ids().iter().map(|&x| x as i64));
+                ids.resize(ids.len() + (max_len - l), pad);
+                mask.extend(enc.get_attention_mask().iter().map(|&x| x as i64));
+                mask.resize(mask.len() + (max_len - l), 0);
                 types.extend(enc.get_type_ids().iter().map(|&x| x as i64));
                 types.resize(types.len() + (max_len - l), 0);
             }
-            (ids, mask, types, pad)
+            (ids, mask, types)
         });
 
         let inputs: Vec<(&str, Tensor<i64>)> = timed("sim.tensor2", || {
