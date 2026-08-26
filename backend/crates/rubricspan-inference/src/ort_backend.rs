@@ -184,6 +184,9 @@ fn resolve_onnx(dir: &Path, precision: Precision) -> PathBuf {
                 fp32
             }
         }
+        // 仅动态量化（model.int8.onnx，CPU 部署档）。静态 QDQ（model.int8.static.onnx）
+        // 已在 ort 2.0-rc.13 CUDA EP 验证为数值错误（MRC 1/143 过 1e-3），
+        // 且 CPU 上极慢（~10s/流水线），故不进入解析链；详见 scripts/export_static_int8.py。
         Precision::Int8 => {
             let int8 = dir.join("model.int8.onnx");
             if int8.exists() {
