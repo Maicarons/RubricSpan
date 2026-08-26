@@ -1,6 +1,6 @@
 [package]
 name = "rubricspan-inference"
-description = "推理引擎：ONNX Runtime / Candle 加载 MRC 与相似度模型（RTX 4060 GPU）"
+description = "推理引擎：ort + tokenizers 原生加载 MRC 与相似度模型"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -14,6 +14,22 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-# M4 启用实际推理依赖（二选一并记录决策，见技术方案 §10.1）：
-# ort = "2"          # ONNX Runtime Rust 绑定（GPU/CPU + INT8）
-# candle / tch       # GPU 路径备选
+reqwest = { workspace = true }
+rand = "0.8"
+tokio = { workspace = true }
+# M8 推理迁移：ONNX Runtime Rust 绑定 + HuggingFace tokenizers 官方 Rust 实现
+# cuda: GPU 优先（需 CUDA 13 运行库）；directml: Windows D3D12 GPU 后备（无 CUDA 13 时启用）
+# default-features = false + tls-rustls：去掉 ort 默认的 native-tls（Linux 下会拉 openssl-sys，
+# 阻碍交叉编译）；rs 用 rustls 纯 Rust TLS，行为等价且树里无任何 C 依赖。
+ort = { version = "=2.0.0-rc.13", default-features = false, features = [
+  "std",
+  "ndarray",
+  "tracing",
+  "download-binaries",
+  "copy-dylibs",
+  "tls-rustls",
+  "lax-feature-matching",
+  "cuda",
+  "directml",
+] }
+tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
