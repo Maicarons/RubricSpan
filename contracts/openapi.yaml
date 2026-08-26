@@ -20,6 +20,8 @@ tags:
     description: 试卷图片文本识别
   - name: scoring
     description: 评分与结果查询
+  - name: admin
+    description: 管理后台（M8 平台化新增：聚合统计与只读运行信息）
 
 paths:
   /api/questions:
@@ -276,6 +278,63 @@ paths:
             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
               schema: { type: string, format: binary }
 
+/api/admin/stats:
+    get:
+      tags: [admin]
+      summary: 管理后台聚合统计（试题/答卷/评分概览、分布与命中率）
+      description: |
+        单次返回全库聚合，供 admin 总览页直接渲染，避免前端逐题 N+1 拉取。
+        全部为只读统计，不包含任何密钥或原始答卷内容。
+      responses:
+        "200":
+          description: 聚合统计
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminStats" }
+
+  /api/admin/config:
+    get:
+      tags: [admin]
+      summary: 管理后台只读运行信息（版本/存储/模型/LLM 端点摘要/OCR 状态）
+      description: |
+        暴露服务运行元信息用于 admin 系统状态页。LLM 端点仅返回名称与模型名，
+        不暴露 base_url 与 api_key。
+      responses:
+        "200":
+          description: 运行信息
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminConfig" }
+
+  /api/admin/scoring-settings:
+    get:
+      tags: [admin]
+      summary: 读取全局评分参数（相似度阈值与部分命中给分比例）
+      description: |
+        返回当前生效的运行时评分参数。题级配置的 thresholds 仍优先覆盖高低阈值；
+        partial_credit 作用于所有相似度部分命中。
+      responses:
+        "200":
+          description: 当前评分参数
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScoringSettings" }
+    put:
+      tags: [admin]
+      summary: 更新全局评分参数（持久化到 store 目录，立即生效）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScoringSettings" }
+      responses:
+        "200":
+          description: 更新后的评分参数
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScoringSettings" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
 components:
   responses:
     BadRequest:
@@ -285,6 +344,98 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
+    AdminStats:
+      type: object
+      required: [questions, answers, scores, point_hits]
+      properties:
+        questions:
+          type: object
+          required: [total, by_config_status]
+          properties:
+            total: { type: integer }
+            by_config_status:
+              type: object
+              additionalProperties: { type: integer }
+              description: none / pending_review / confirmed 计数
+        answers:
+          type: object
+          required: [total]
+          properties:
+            total: { type: integer }
+        scores:
+          type: object
+          required: [total, average, max_score_average, by_rating, distribution]
+          properties:
+            total: { type: integer }
+            average: { type: number, description: 平均得分 }
+            max_score_average: { type: number, description: 满分平均值 }
+            by_rating:
+              type: object
+              additionalProperties: { type: integer }
+              description: excellent / good / pass / fail 计数
+            distribution:
+              type: array
+              description: 得分占比（total/max）分桶分布
+              items:
+                type: object
+                required: [label, count]
+                properties:
+                  label: { type: string, example: "60-80%" }
+                  count: { type: integer }
+        point_hits:
+          type: array
+          description: 得分点命中率（按题×得分点聚合）
+          items:
+            type: object
+            required: [question_id, point_id, hit, total]
+            properties:
+              question_id: { type: string }
+              point_id: { type: integer }
+              hit: { type: integer, description: 命中次数（hit_status != miss） }
+              total: { type: integer, description: 评分总次数 }
+
+    AdminConfig:
+      type: object
+      required: [server_version, store_path, models, llm, ocr]
+      properties:
+        server_version: { type: string, example: "0.1.0" }
+        store_path: { type: string, description: 数据落盘路径（仅展示） }
+        models:
+          type: object
+          required: [mrc, similarity]
+          properties:
+            mrc: { type: boolean }
+            similarity: { type: boolean }
+        llm:
+          type: object
+          required: [configured, endpoints]
+          properties:
+            configured: { type: boolean }
+            endpoints:
+              type: array
+              description: 端点摘要（名称 + 模型名；不含密钥）
+              items:
+                type: object
+                required: [name, model]
+                properties:
+                  name: { type: string }
+                  model: { type: string }
+        ocr:
+          type: object
+          required: [enabled]
+          properties:
+            enabled: { type: boolean, description: OCR 随 M8 迁移暂停，恒为 false }
+            note: { type: string }
+
+    ScoringSettings:
+      type: object
+      required: [similarity_high, similarity_low, partial_credit]
+      description: 全局评分参数（管理后台可调；题级 thresholds 优先覆盖高低阈值）
+      properties:
+        similarity_high: { type: number, minimum: 0, maximum: 1, default: 0.9, description: 高阈值：相似度 ≥ 该值判语义命中（满分） }
+        similarity_low: { type: number, minimum: 0, maximum: 1, default: 0.75, description: 低阈值：介于两阈值之间判部分命中；< 该值未命中 }
+        partial_credit: { type: number, minimum: 0, maximum: 1, default: 0.25, description: 部分命中给分比例（weight × 该值） }
+
     Error:
       type: object
       required: [code, message]
@@ -346,8 +497,8 @@ components:
         thresholds:
           type: object
           properties:
-            similarity_high: { type: number, default: 0.85 }
-            similarity_low: { type: number, default: 0.60 }
+            similarity_high: { type: number, default: 0.90 }
+            similarity_low: { type: number, default: 0.75 }
 
     AnswerSubmission:
       type: object
@@ -424,8 +575,8 @@ components:
         point_score: { type: number, description: 本点实际得分 }
         source:
           type: string
-          enum: [mrc, similarity]
-          description: 本点得分来自哪条路径
+          enum: [mrc, similarity, option]
+          description: 本点得分来自哪条路径（option=M8 选择型得分点选项规则判定）
 
     ScoreResult:
       type: object
