@@ -1,0 +1,24 @@
+{
+  "name": "mrc-mengzi-bert",
+  "version": "2026.08.23",
+  "base_model": "Langboat/mengzi-bert-base",
+  "task": "mrc_extraction",
+  "max_seq_length": 512,
+  "onnx_opset": 17,
+  "training_data": {
+    "dataset": "sasbench+synthetic MRC five-tuples (M1-7)",
+    "samples": 17532,
+    "bridge": "CMRC2018 1 epoch",
+    "seed": 42
+  },
+  "metrics": {
+    "em": 0.4815,
+    "token_f1": 0.7578,
+    "point_acc": 0.894,
+    "score_corr": 0.765,
+    "alias_hit_rate": 0.9431
+  },
+  "has_answer_threshold": -1.9519,
+  "exported_at": "2026-08-23T20:30:18+00:00",
+  "sha256": "aa07921b1881e5e5aa7ae25dccf200171a3bebd2152122db760704039600da26"
+}
