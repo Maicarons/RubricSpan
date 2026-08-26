@@ -15,7 +15,7 @@
 ## 变更控制规则
 
 1. 契约**冻结后**，任何字段级变更（增 / 删 / 改语义）必须：
-   - 在 [`../docs/CHANGELOG-contracts.md`](../docs/CHANGELOG-contracts.md) 追加一条记录（原因、影响面、确认人）；
+   - 在 [`../docs/quality/changelog-contracts.md`](../docs/quality/changelog-contracts.md) 追加一条记录（原因、影响面、确认人）；
    - 经全部消费方确认后方可修改文件；
 2. 接口实现以契约为准：后端须通过基于 `openapi.yaml` 的契约测试，不接受口头约定；
 3. 契约文件的变更提交须在提交信息中引用变更记录编号（如 `contracts(openapi): CC-003 增加 ocr_confidence 字段`）。
