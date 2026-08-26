@@ -31,7 +31,7 @@ pub struct ScoringPoint {
     pub aliases: Vec<String>,
 }
 
-/// 本题相似度阈值（缺省用全局默认 0.85 / 0.60）。
+/// 本题相似度阈值（缺省用全局默认 0.90 / 0.75；全局默认可在管理后台调整）。
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct Thresholds {
@@ -43,10 +43,10 @@ pub struct Thresholds {
 
 impl Thresholds {
     fn default_high() -> f64 {
-        0.85
+        0.90
     }
     fn default_low() -> f64 {
-        0.60
+        0.75
     }
 }
 
@@ -87,7 +87,7 @@ mod tests {
                 {"point_id": 1, "point_text": "发生在1898年", "weight": 1, "aliases": ["1898年", "一八九八年"]},
                 {"point_id": 2, "point_text": "又称百日维新", "weight": 1, "aliases": ["百日维新", "戊戌维新"]}
             ],
-            "thresholds": {"similarity_high": 0.85, "similarity_low": 0.60}
+            "thresholds": {"similarity_high": 0.90, "similarity_low": 0.75}
         }"#;
         let cfg: ScoringConfig = serde_json::from_str(json).expect("契约示例应可解析");
         assert_eq!(cfg.points.len(), 2);
