@@ -24,6 +24,8 @@ pub enum ScoreSource {
     Mrc,
     /// 来自语义相似度兜底。
     Similarity,
+    /// 来自选择型得分点选项规则判定（M8 新增，纯文本规则）。
+    Option,
 }
 
 /// 单个得分点的评分明细。
