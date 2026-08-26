@@ -64,7 +64,7 @@
 
 | 问题 | 现象 | 修复 |
 | --- | --- | --- |
-| torch 导入失败 `WinError 127 cudnn_cnn64_9.dll` | 系统 CUDA 运行库目录的 cuDNN 与 torch 自带 `cudnn_cnn64_9.dll` 冲突（PATH 遮蔽） | 运行 torch 相关命令时使用干净 PATH（剔除系统 CUDA 目录，前置 `torch/lib`） |
+| torch 导入失败（`WinError 127`，cuDNN 运行库 DLL 缺失） | 系统 CUDA 运行库目录的 cuDNN 与 torch 自带 cuDNN 冲突（PATH 遮蔽） | 运行 torch 相关命令时使用干净 PATH（剔除系统 CUDA 目录，前置 `torch/lib`） |
 | ONNX 评估 OOM | `_onnx_backend` 优先 `CUDAExecutionProvider`，训练占满 GPU（显存余量不足）→ 384MB 激活分配失败 | 评估/一致性校验强制 CPU EP（指标与批次无关，结果不变）；运行时新增 `RUNTIME_FORCE_CPU=1` 模式供同机共存 |
 | 相似度导出报 "Expected all tensors to be on the same device" | Git Bash 启动原生 exe 时**丢弃空字符串环境变量**，`CUDA_VISIBLE_DEVICES=""` 等价未设置，SentenceTransformer 默认上 cuda:0 | 导出代码显式 `device="cpu"`（不依赖环境变量）；需要 CPU 时一律用代码级指定或非空值 |
 | 评分 HTTP 500 + 运行时日志 ConnectionAbortedError | `reqwest::blocking::Client` **默认整请求超时仅 30s**：CPU 模式下懒加载+推理超时后客户端断连 | `RuntimeBackend::new` 显式 `.timeout(600s)`；另修复在 tokio runtime 内构造 blocking client 导致的启动 panic（main.rs 改同步上下文预建依赖） |
