@@ -51,8 +51,11 @@ pub fn router(state: AppState) -> Router {
         .route("/api/standard-answer/parse", post(parse_standard_answer))
         .route("/api/standard-answer", put(save_standard_answer).get(get_standard_answer))
         .route("/api/answers", post(submit_answers).get(list_answers))
-        .route("/api/ocr", post(run_ocr))
-        .route("/api/score", post(score))
+        // 推理型端点加并发限制：模型会话为互斥串行资源，超发只会把请求堆在
+        // spawn_blocking 线程池里空转（占满阻塞线程池还会饿死其他端点）。
+        // 限制=4 允许少量缓冲排队，同时保证队列有界、公平。
+        .route("/api/ocr", post(run_ocr).layer(tower::limit::ConcurrencyLimitLayer::new(4)))
+        .route("/api/score", post(score).layer(tower::limit::ConcurrencyLimitLayer::new(4)))
         .route("/api/results", get(query_results))
         .route("/api/health", get(health))
         .route("/api/admin/stats", get(admin_stats))
@@ -413,12 +416,14 @@ async fn score(
         }
     };
 
-    // 收集答卷与 OCR 置信度（异步存储读；OCR 随 M8 暂停但契约字段保留）
+    // 收集答卷与 OCR 置信度（异步存储读；OCR 随 M8 暂停但契约字段保留）。
+    // OCR 结果按题存储：同一题的所有答卷共享同一置信度，只需查询一次（消除 N+1）。
+    let ocr_conf_for_question = state.storage.get_ocr(&body.question_id).await.map(|o| o.confidence);
     let mut items: Vec<(String, rubricspan_storage::Answer, Option<f64>)> = Vec::new();
     for aid in &body.answer_ids {
         if let Some(a) = state.storage.get_answer(aid).await {
             let ocr_conf = if a.source.as_deref() == Some("ocr") {
-                state.storage.get_ocr(&a.question_id).await.map(|o| o.confidence)
+                ocr_conf_for_question
             } else {
                 None
             };
@@ -450,8 +455,9 @@ async fn score(
         Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
     };
 
-    // 结果落盘（异步存储写）
+    // 结果落盘（单事务批量写；学生信息从收集时的 items 关联）
     let mut resps = Vec::new();
+    let mut records = Vec::with_capacity(scored.len());
     for (aid, outcome, ocr_conf) in scored {
         let (student_id, class_name) = items
             .iter()
@@ -471,23 +477,20 @@ async fn score(
             ocr_confidence: ocr_conf,
             scored_at: now,
         });
-        if let Err(e) = state
-            .storage
-            .save_result(rubricspan_storage::ScoreRecord {
-                question_id: outcome.question_id,
-                answer_id: aid,
-                student_id,
-                class_name,
-                total_score: outcome.total_score,
-                max_score: outcome.max_score,
-                rating: format!("{:?}", outcome.rating).to_lowercase(),
-                point_details: serde_json::to_value(&outcome.point_details).unwrap_or(json!([])),
-                ocr_confidence: ocr_conf,
-            })
-            .await
-        {
-            return err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string());
-        }
+        records.push(rubricspan_storage::ScoreRecord {
+            question_id: outcome.question_id,
+            answer_id: aid,
+            student_id,
+            class_name,
+            total_score: outcome.total_score,
+            max_score: outcome.max_score,
+            rating: format!("{:?}", outcome.rating).to_lowercase(),
+            point_details: serde_json::to_value(&outcome.point_details).unwrap_or(json!([])),
+            ocr_confidence: ocr_conf,
+        });
+    }
+    if let Err(e) = state.storage.save_results(records).await {
+        return err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string());
     }
     Json(json!({ "question_id": qid, "results": resps })).into_response()
 }
