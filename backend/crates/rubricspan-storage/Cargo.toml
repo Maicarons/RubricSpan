@@ -1,6 +1,6 @@
 [package]
 name = "rubricspan-storage"
-description = "SQLite 持久化：试题 / 答卷 / 评分结果 / OCR 任务"
+description = "持久化层：SQLite（本地测试）/ MySQL（生产）/ Memory（临时兼容）"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,5 +12,9 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-# M4 启用：
-# sqlx = { workspace = true }
+# M8.1 启用：SQLite / MySQL 双后端（查询走运行时 API，构建不依赖数据库实例）
+sqlx = { workspace = true }
+async-trait = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
