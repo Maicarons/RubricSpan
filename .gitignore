@@ -73,6 +73,7 @@ Cargo.lock.backup
 
 # ---------- Node / Next.js ----------
 node_modules/
+docs/.vitepress/cache/
 frontend/.next/
 frontend/out/
 frontend/build/
