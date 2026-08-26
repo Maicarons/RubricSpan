@@ -1,0 +1,17 @@
+{
+  "name": "similarity-text2vec-base-chinese",
+  "version": "2026.08.23",
+  "base_model": "shibing624/text2vec-base-chinese",
+  "task": "sentence_similarity",
+  "pooling": "mean (推理侧按 attention_mask 池化)",
+  "max_seq_length": 128,
+  "onnx_opset": 17,
+  "training_data": {
+    "dataset": "M1-7 similarity pairs + SAS-Datasets + STS-B zh",
+    "pairs": 55199,
+    "loss": "CosineSimilarityLoss",
+    "seed": 42
+  },
+  "exported_at": "2026-08-23T20:30:21+00:00",
+  "sha256": "97930a7b6ed122229a144dbdcc14c2601233818bc71f01121e8d6785d2ce2070"
+}
