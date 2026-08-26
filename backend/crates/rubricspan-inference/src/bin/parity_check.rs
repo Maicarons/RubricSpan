@@ -16,18 +16,21 @@ use serde_json::Value;
 fn main() -> Result<()> {
     let mut golden = PathBuf::from("../data/goldens/inference_golden.json");
     let mut models_dir = PathBuf::from("../models");
+    let mut precision = Precision::Fp32;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--golden" => golden = PathBuf::from(args.next().expect("缺参数")),
             "--models-dir" => models_dir = PathBuf::from(args.next().expect("缺参数")),
+            "--precision" => precision = args.next().expect("缺参数").parse()?,
             other => bail!("未知参数 {other}"),
         }
     }
 
     let raw = std::fs::read_to_string(&golden)?;
     let data: Value = serde_json::from_str(&raw)?;
-    let backend = OrtBackend::load(&models_dir, Precision::Fp32, true)?;
+    let backend = OrtBackend::load(&models_dir, precision, true)?;
+    println!("对拍精度档：{precision:?}（默认 fp32 为验收门；fp16/int8 仅报告偏差）");
 
     let tol = data
         .pointer("/meta/tolerance_prob")

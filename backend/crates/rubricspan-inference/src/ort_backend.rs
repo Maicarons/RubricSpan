@@ -30,6 +30,9 @@ const SIM_DIM: usize = 768;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Precision {
     Fp32,
+    /// GPU 部署档（Ada+ Tensor Core、显存减半）；非对拍契约目标，缺失回退 fp32。
+    /// 产物由 scripts/export_fp16.py 生成（模型不入库）。
+    Fp16,
     Int8,
 }
 
@@ -37,6 +40,7 @@ impl FromStr for Precision {
     type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self> {
         match s.trim().to_ascii_lowercase().as_str() {
+            "fp16" => Ok(Precision::Fp16),
             "int8" => Ok(Precision::Int8),
             _ => Ok(Precision::Fp32),
         }
@@ -171,6 +175,15 @@ fn resolve_onnx(dir: &Path, precision: Precision) -> PathBuf {
     let fp32 = dir.join("model.onnx");
     match precision {
         Precision::Fp32 => fp32,
+        Precision::Fp16 => {
+            let fp16 = dir.join("model.fp16.onnx");
+            if fp16.exists() {
+                fp16
+            } else {
+                tracing::warn!("FP16 模型缺失，回落 FP32：{}", fp16.display());
+                fp32
+            }
+        }
         Precision::Int8 => {
             let int8 = dir.join("model.int8.onnx");
             if int8.exists() {
