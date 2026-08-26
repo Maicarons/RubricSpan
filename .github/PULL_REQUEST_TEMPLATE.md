@@ -11,5 +11,5 @@
 
 - [ ] 后端改动已运行 `cargo test`
 - [ ] 前端改动已运行 `npm run typecheck`
-- [ ] 契约改动已在 `docs/CHANGELOG-contracts.md` 登记
+- [ ] 契约改动已在 `docs/quality/changelog-contracts.md` 登记
 - [ ] 无密钥/大文件入库
