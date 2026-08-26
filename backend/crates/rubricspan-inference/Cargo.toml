@@ -33,3 +33,6 @@ ort = { version = "=2.0.0-rc.13", default-features = false, features = [
   "directml",
 ] }
 tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
+# bin 工具（bench_infer/parity_check）需要把 ort 的 EP 探测日志打到终端；
+# dev-dependencies 不对 src/bin 生效，故放在正式依赖（lib 未引用不参与链接语义）
+tracing-subscriber = { workspace = true }
