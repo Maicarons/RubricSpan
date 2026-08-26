@@ -410,25 +410,51 @@ impl OrtBackend {
         Ok((take("start_logits")?, take("end_logits")?))
     }
 
-    /// 单文本编码（相似度模型），返回 attention-mask 平均池化后的向量。
-    fn encode_mean(&self, text: &str) -> Result<Vec<f64>> {
+    /// 批量单文本编码（相似度模型）：多文本合一次 `[n, L]` 推理，L 为批内最长
+    /// 实际 token 数（≤ SIM_MAX_LEN，截断已由分词器配置保证）。
+    ///
+    /// **数值一致性**：attention_mask 屏蔽 pad 键，真实位置的输出向量与 padding
+    /// 长度无关；池化只按各自行 mask>0 的位置加权，因此与逐条定长 128 编码
+    /// 严格一致（对拍金标覆盖此断言）。学生答案向量在批内只算一次。
+    fn encode_mean_batch(&self, texts: &[&str]) -> Result<Vec<Vec<f64>>> {
         use ort::value::Tensor;
 
-        let enc = self
-            .sim
-            .tokenizer
-            .encode(text.to_string(), true)
-            .map_err(|e| anyhow!("分词失败：{e}"))?;
-        let ids = pad_to_len(enc.get_ids().iter().map(|&x| x as i64).collect(), self.sim.pad_id(), SIM_MAX_LEN);
-        let mask = pad_to_len(enc.get_attention_mask().iter().map(|&x| x as i64).collect(), 0, SIM_MAX_LEN);
+        let n = texts.len();
+        if n == 0 {
+            return Ok(Vec::new());
+        }
+        let encs: Vec<_> = texts
+            .iter()
+            .map(|t| {
+                self.sim
+                    .tokenizer
+                    .encode(t.to_string(), true)
+                    .map_err(|e| anyhow!("分词失败：{e}"))
+            })
+            .collect::<Result<_>>()?;
+        let len = |i: usize| encs[i].get_ids().len();
+        let max_len = (0..n).map(len).max().unwrap_or(1).max(1);
+
+        let mut ids: Vec<i64> = Vec::with_capacity(n * max_len);
+        let mut mask: Vec<i64> = Vec::with_capacity(n * max_len);
+        let mut types: Vec<i64> = Vec::with_capacity(n * max_len);
+        let pad = self.sim.pad_id();
+        for enc in &encs {
+            let l = enc.get_ids().len();
+            ids.extend(enc.get_ids().iter().map(|&x| x as i64));
+            ids.resize(ids.len() + (max_len - l), pad);
+            mask.extend(enc.get_attention_mask().iter().map(|&x| x as i64));
+            mask.resize(mask.len() + (max_len - l), 0);
+            types.extend(enc.get_type_ids().iter().map(|&x| x as i64));
+            types.resize(types.len() + (max_len - l), 0);
+        }
 
         let mut inputs: Vec<(&str, Tensor<i64>)> = vec![
-            ("input_ids", Tensor::from_array(([1usize, SIM_MAX_LEN], ids))?),
-            ("attention_mask", Tensor::from_array(([1usize, SIM_MAX_LEN], mask.clone()))?),
+            ("input_ids", Tensor::from_array(([n, max_len], ids))?),
+            ("attention_mask", Tensor::from_array(([n, max_len], mask))?),
         ];
         if self.sim.has_token_type_ids {
-            let types = pad_to_len(enc.get_type_ids().iter().map(|&x| x as i64).collect(), 0, SIM_MAX_LEN);
-            inputs.push(("token_type_ids", Tensor::from_array(([1usize, SIM_MAX_LEN], types))?));
+            inputs.push(("token_type_ids", Tensor::from_array(([n, max_len], types))?));
         }
         let mut session = self.sim.session.lock().expect("相似度会话锁中毒");
         let out_name = session
@@ -442,26 +468,26 @@ impl OrtBackend {
             .ok_or_else(|| anyhow!("相似度模型缺少输出 {out_name}"))?
             .try_extract_tensor::<f32>()?;
 
-        // [1, seq, dim]，seq 恒为 SIM_MAX_LEN（padding=max_length）
-        let seq = data.len() / SIM_DIM.max(1);
-        let mut vec = vec![0.0f64; SIM_DIM];
-        let mut denom = 0.0f64;
-        for t in 0..seq.min(mask.len()) {
-            let w = mask[t] as f64;
-            if w <= 0.0 {
-                continue;
+        // [n, max_len, SIM_DIM] → 逐行按各自 mask 加权均值池化
+        let mut out = Vec::with_capacity(n);
+        for (i, enc) in encs.iter().enumerate() {
+            let real = enc.get_ids().len().min(max_len);
+            let denom = real as f64;
+            let mut vec = vec![0.0f64; SIM_DIM];
+            if denom > 0.0 {
+                let row = &data[i * max_len * SIM_DIM..(i * max_len + real) * SIM_DIM];
+                for chunk in row.chunks_exact(SIM_DIM) {
+                    for (v, &x) in vec.iter_mut().zip(chunk) {
+                        *v += x as f64;
+                    }
+                }
+                for v in &mut vec {
+                    *v /= denom;
+                }
             }
-            denom += w;
-            for d in 0..SIM_DIM {
-                vec[d] += data[t * SIM_DIM + d] as f64 * w;
-            }
+            out.push(vec);
         }
-        if denom > 0.0 {
-            for v in &mut vec {
-                *v /= denom;
-            }
-        }
-        Ok(vec)
+        Ok(out)
     }
 
     fn cosine(a: &[f64], b: &[f64]) -> f64 {
@@ -516,8 +542,24 @@ impl InferenceBackend for OrtBackend {
     }
 
     fn similarity(&self, point_text: &str, student_answer: &str) -> Result<SimilarityOutput> {
-        let va = self.encode_mean(point_text)?;
-        let vb = self.encode_mean(student_answer)?;
-        Ok(SimilarityOutput { cosine: round6(Self::cosine(&va, &vb)) })
+        let vecs = self.encode_mean_batch(&[point_text, student_answer])?;
+        Ok(SimilarityOutput { cosine: round6(Self::cosine(&vecs[0], &vecs[1])) })
+    }
+
+    /// 学生答案编码一次 + 全部得分点合批一次推理（性能优化，数值同逐条）。
+    fn similarity_batch(
+        &self,
+        point_texts: &[String],
+        student_answer: &str,
+    ) -> Result<Vec<SimilarityOutput>> {
+        let mut texts: Vec<&str> = Vec::with_capacity(point_texts.len() + 1);
+        texts.push(student_answer);
+        texts.extend(point_texts.iter().map(|s| s.as_str()));
+        let vecs = self.encode_mean_batch(&texts)?;
+        let ans = &vecs[0];
+        Ok(vecs[1..]
+            .iter()
+            .map(|v| SimilarityOutput { cosine: round6(Self::cosine(ans, v)) })
+            .collect())
     }
 }
