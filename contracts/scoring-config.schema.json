@@ -58,20 +58,20 @@
     "thresholds": {
       "type": "object",
       "additionalProperties": false,
-      "description": "本题相似度阈值（可选，缺省用全局默认 0.85 / 0.60）",
+      "description": "本题相似度阈值（可选，缺省用全局默认 0.90 / 0.75，可在管理后台调整）",
       "properties": {
         "similarity_high": {
           "type": "number",
           "minimum": 0,
           "maximum": 1,
-          "default": 0.85,
+          "default": 0.90,
           "description": "高阈值：≥ 该值判语义命中，给满分"
         },
         "similarity_low": {
           "type": "number",
           "minimum": 0,
           "maximum": 1,
-          "default": 0.6,
+          "default": 0.75,
           "description": "低阈值：< 该值判未命中；介于两阈值之间为部分命中"
         }
       }
