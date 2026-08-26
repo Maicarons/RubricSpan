@@ -7,6 +7,7 @@ members = [
     "crates/rubricspan-inference",# 推理引擎：ONNX Runtime / Candle 加载与推理
     "crates/rubricspan-ocr",      # RapidOCR 集成：检测 + 识别 + 作答区过滤
     "crates/rubricspan-storage",  # SQLite 持久化：试题 / 答卷 / 结果
+    "crates/rubricspan-wasm",     # 浏览器离线评分入口（M6 · 方案 B）
 ]
 
 [workspace.package]
@@ -27,8 +28,10 @@ tower-http = { version = "0.6", features = ["trace", "cors"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-# 存储（M4）
-sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+# 存储（M8.1：SQLite 本地测试 + MySQL 生产，均走 sqlx；Memory 保留为临时兼容）
+# 查询走运行时 API（query_as + FromRow derive），不依赖编译期宏，构建无需数据库实例
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "mysql", "derive"] }
+async-trait = "0.1"
 
 # 推理（M4：推理引擎集成时启用）
 # ort = "2"                    # ONNX Runtime Rust 绑定
