@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """OpenAI 兼容打标客户端（M1-3 基础设施）。
 
-封装 fiblab 等 OpenAI 兼容端点的调用细节：
+封装 OpenAI 兼容端点（多端点 fallback 队列）的调用细节：
 
 - 多端点 fallback 队列：``.env`` 按 ``LLM_ENDPOINT_<n>_{BASE_URL,API_KEY,MODEL[,NAME]}``
   配置多个接入（``n`` 升序即调用优先级），未配置编号端点时回落到旧单端点变量组
   （OPENAI_BASE_URL / OPENAI_API_KEY / LABELING_MODEL）。每次调用都从队首端点
   开始；某端点整轮重试耗尽后自动切到下一个，全部端点失败才抛错（样本进重试
   队列）。无冷却、不记忆失败：队首端点恢复后，下一次调用立即回到它；
-- 推理模型适配：deepseek-v4-flash 等模型先输出 reasoning_content 再输出 content，
+- 推理模型适配：推理型模型先输出 reasoning_content 再输出 content，
   completion 预算被思考占用。出现 ``content=None`` 且 ``finish_reason=length`` 时，
   按 2 倍递增 max_tokens 重试（上限 ``max_tokens_max``）；
 - 限速与重试：并发线程池 + 指数退避（429 / 5xx / 超时 / JSON 解析失败）；
