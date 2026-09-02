@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import urllib.parse
 import urllib.request
 from collections import OrderedDict
 from pathlib import Path
@@ -25,7 +26,20 @@ CONFIGS = ROOT / "data" / "scoring_configs"
 OUT = ROOT / "data" / "goldens" / "inference_golden.json"
 
 
+def _assert_safe_runtime_url(url: str) -> None:
+    """仅允许 http/https 且目标为环回/私网地址（内部评测脚本，防 SSRF）。"""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"不允许的协议: {parsed.scheme!r}")
+    host = (parsed.hostname or "").lower()
+    if host not in ("localhost", "127.0.0.1", "::1") and not (
+        host.startswith("10.") or host.startswith("192.168.") or host.startswith("172.")
+    ):
+        raise ValueError(f"不允许的目标主机: {host!r}")
+
+
 def http_json(url: str, body: dict, timeout: int = 600) -> dict:
+    _assert_safe_runtime_url(url)
     req = urllib.request.Request(
         url,
         data=json.dumps(body).encode("utf-8"),

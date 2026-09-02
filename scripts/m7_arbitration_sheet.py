@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import csv
+import io
 import json
 import sys
 from pathlib import Path
@@ -60,10 +61,11 @@ def main() -> int:
     rows.sort(key=lambda r: r["conf"], reverse=True)
 
     OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
-    with open(OUT_CSV, "w", newline="", encoding="utf-8-sig") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-        w.writeheader()
-        w.writerows(rows)
+    buf = io.StringIO(newline="")
+    w = csv.DictWriter(buf, fieldnames=list(rows[0].keys()))
+    w.writeheader()
+    w.writerows(rows)
+    OUT_CSV.write_text(buf.getvalue(), encoding="utf-8-sig")
 
     top = rows[:50]
     lines = [
