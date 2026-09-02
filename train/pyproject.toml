@@ -7,7 +7,7 @@ requires-python = ">=3.10,<3.13"
 license = { text = "AGPL-3.0-or-later" }
 dependencies = [
     "openai>=1.40",          # OpenAI 兼容接口（打标 / 标准答案解析）
-    "torch>=2.3",            # 训练框架（CUDA 13 版按官方指引安装，本机已装 cu130）
+    "torch>=2.3",            # 训练框架（CUDA 版按官方指引安装）
     "transformers>=4.44",    # MRC 微调
     "sentence-transformers>=3.0",  # 相似度模型微调
     "datasets>=2.20",        # 数据集加载（SAS-Bench / CMRC 等）

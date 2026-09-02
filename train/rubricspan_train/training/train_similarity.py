@@ -4,7 +4,7 @@
 训练对 = M1-7 相似度句子对（label 派生 + SAS-Datasets 真实人工分 + STS-B 中文），
 强化专有名词同义判别（戊戌变法 ↔ 百日维新类等价表述）。
 
-M8 调优重训时由 ST `fit` 改为等效手写循环：ST 3.3 的 smart batching 在 8GB
+M8 调优重训时由 ST `fit` 改为等效手写循环：ST 3.3 的 smart batching 在低显存环境
 FP32 下仅 ~32 对/步、15-20s/步（2 epochs 需 8-12 小时）；手写循环对每批 64 对
 批量 encode（mean pooling）→ cosine-MSE → AdamW linear warmup，定期跑
 EmbeddingSimilarityEvaluator 并按 val Pearson 保存最优。训练入口/超参 CLI 不变。

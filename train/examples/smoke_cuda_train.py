@@ -1,4 +1,4 @@
-"""M0-3 smoke test: tiny Transformer trained on a CUDA 12 GPU.
+"""M0-3 smoke test: tiny Transformer trained on a CUDA GPU.
 
 Verifies: CUDA available, forward/backward on GPU, loss decreasing, optimizer step.
 """

@@ -32,7 +32,7 @@ ONNX = ["model.onnx", "model.int8.onnx", "model.fp16.onnx"]
 TIERS = [
     ("model.onnx", "FP32", "对拍验收档（与金标 1e-3 一致）；GPU/CPU 通用基线"),
     ("model.int8.onnx", "INT8（动态量化）", "CPU 部署档（动态 DQL 在 CUDA 不生效，勿用于 GPU）"),
-    ("model.fp16.onnx", "FP16", "GPU Ada+ 最快档（~6ms/前向）；非对拍档，偏差 ~1e-3"),
+    ("model.fp16.onnx", "FP16", "GPU 最快档（~6ms/前向）；非对拍档，偏差 ~1e-3"),
 ]
 
 README_TMPL = """# {repo} · {title}

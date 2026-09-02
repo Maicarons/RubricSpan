@@ -46,7 +46,7 @@ const SIM_DIM: usize = 768;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Precision {
     Fp32,
-    /// GPU 部署档（Ada+ Tensor Core、显存减半）；非对拍契约目标，缺失回退 fp32。
+    /// GPU 部署档（较新架构 Tensor Core、显存减半）；非对拍契约目标，缺失回退 fp32。
     /// 产物由 scripts/export_fp16.py 生成（模型不入库）。
     Fp16,
     Int8,
@@ -167,7 +167,7 @@ fn build_session(onnx_path: &Path, force_cpu: bool) -> Result<ort::session::Sess
     };
 
     if !force_cpu {
-        // CUDA arena 默认按 2 的幂扩展（单次跳 1GB）；本机 cuDNN 9.24 + ORT 1.28 组合下，
+        // CUDA arena 默认按 2 次幂扩展（单次跳 1GB）；cuDNN 与 ORT 的某些组合下，
         // 大块扩展后的 cuDNN 初始化会硬中止（exit 0xffffffff，无 panic），改为按需小步扩展规避。
         match attempt(
             vec![CUDA::default()

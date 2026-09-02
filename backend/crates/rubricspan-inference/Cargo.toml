@@ -18,7 +18,7 @@ reqwest = { workspace = true }
 rand = "0.8"
 tokio = { workspace = true }
 # M8 推理迁移：ONNX Runtime Rust 绑定 + HuggingFace tokenizers 官方 Rust 实现
-# cuda: GPU 优先（需 CUDA 13 运行库）；directml: Windows D3D12 GPU 后备（无 CUDA 13 时启用）
+# cuda: GPU 优先（需 CUDA 运行库）；directml: Windows D3D12 GPU 后备（无对应 CUDA 运行库时启用）
 # default-features = false + tls-rustls：去掉 ort 默认的 native-tls（Linux 下会拉 openssl-sys，
 # 阻碍交叉编译）；rs 用 rustls 纯 Rust TLS，行为等价且树里无任何 C 依赖。
 ort = { version = "=2.0.0-rc.13", default-features = false, features = [

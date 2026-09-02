@@ -3,7 +3,7 @@
 
 产物：`{models}/mrc/model.fp16.onnx`、`{models}/similarity/model.fp16.onnx`，
 由后端 `RUBRICSPAN_MODEL_PRECISION=fp16` 选择（缺失时回落 fp32）。
-fp16 档专为 GPU 部署（Ada 及以上有 fp16 Tensor Core，显存减半）；
+fp16 档专为 GPU 部署（较新架构 GPU 有 fp16 Tensor Core，显存减半）；
 不是对拍契约目标（fp16 数值与 fp32 金标差 >1e-3，勿用 parity_check 验收）。
 
 用法（仓库根目录）：
