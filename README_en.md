@@ -1,6 +1,6 @@
 # RubricSpan · Yuewei — A Subjective-Answer Grading Teacher Model
 
-> A **local-first** intelligent grading system for Chinese subjective answers (humanities short-answer / essay / document-analysis questions). A large model generates training labels offline; a lightweight encoder model is trained to run on a commodity GPU (≥8 GB VRAM), closing the loop of "upload exam paper / question → answer recognition → automatic scoring → teacher review" via a web frontend. Fully local; separated frontend/backend, training/inference, and online/offline dual modes.
+> A **local-first** intelligent grading system for Chinese subjective answers (humanities short-answer / essay / document-analysis questions). A large model generates training labels offline; a lightweight encoder model is trained to run on a commodity GPU, closing the loop of "upload exam paper / question → answer recognition → automatic scoring → teacher review" via a web frontend. Fully local; separated frontend/backend, training/inference, and online/offline dual modes.
 
 ## Key Features
 
@@ -40,7 +40,7 @@ RubricSpan/
 
 ## Quick Start
 
-> Baseline: NVIDIA GPU (≥8GB VRAM) + CUDA 12, Python 3.10+, Rust stable, Node.js 20+.
+> Baseline: a Rust toolchain, Node.js, and Python (training only); an NVIDIA GPU is optional for inference acceleration.
 
 ### Backend (Rust online service)
 

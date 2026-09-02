@@ -19,7 +19,7 @@
 | 组件 | 来源 | 许可 | 用途 |
 |---|---|---|---|
 | RapidOCR（PP-OCRv3 系列） | `rapidocr_onnxruntime` PyPI + PaddleOCR 权重 | Apache-2.0 | 答卷图像 OCR（M0-6 已验证 GPU 推理） |
-| PyTorch 2.11 + cu128 | PyTorch 官方 | BSD-3-Clause | GPU 训练框架 |
+| PyTorch（CUDA 版） | PyTorch 官方 | BSD-3-Clause | GPU 训练框架 |
 | sentence-transformers 3.3.1 | Hugging Face | Apache-2.0 | 相似度/嵌入模型微调 |
 
 ## 合规使用约定
