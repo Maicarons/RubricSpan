@@ -374,10 +374,11 @@ mod tests {
                 weight: 2.0,
                 aliases: vec![],
             }],
-            thresholds: Some(Thresholds::default()),
+            // 显式阈值，与全局默认解耦：夹具余弦 0.9 ≥ τ_hi 0.85 → 语义命中满分
+            thresholds: Some(Thresholds { similarity_high: 0.85, similarity_low: 0.75 }),
             meta: None,
         };
-        // MRC 必然未命中 → 相似度 0.9 ≥ 0.90 → 语义命中满分
+        // MRC 必然未命中 → 相似度 0.9 ≥ 0.85 → 语义命中满分
         let outcome = score_answer(&config, "推动了当时的思想解放潮流", &FakeBackend, None).unwrap();
         let d = &outcome.point_details[0];
         assert_eq!(d.hit_status, HitStatus::HitSemantic);
@@ -412,7 +413,8 @@ mod tests {
                     aliases: Vec::new(),
                 },
             ],
-            thresholds: Some(Thresholds::default()),
+            // 显式阈值，与全局默认解耦：夹具余弦 0.9 ≥ τ_hi 0.85 → 语义满分
+            thresholds: Some(Thresholds { similarity_high: 0.85, similarity_low: 0.75 }),
             meta: None,
         };
         let outcome = score_answer(&config, "1）B\n（2）诗人虽有感叹，却依旧自勉乐观", &FakeBackend, None).unwrap();
@@ -420,7 +422,7 @@ mod tests {
         assert_eq!(outcome.point_details[0].source, ScoreSource::Option);
         assert_eq!(outcome.point_details[0].extracted_span.as_deref(), Some("B"));
         assert_eq!(outcome.point_details[0].point_score, 3.0);
-        // 未出现的期望字母 → 回退 MRC/相似度（FakeBackend 相似度 0.9 ≥ 0.90 → 语义满分）
+        // 未出现的期望字母 → 回退 MRC/相似度（夹具相似度 0.9 ≥ 0.85 → 语义满分）
         assert_eq!(outcome.point_details[1].source, ScoreSource::Similarity);
         assert_eq!(outcome.point_details[1].hit_status, HitStatus::HitSemantic);
         assert_eq!(outcome.total_score, 3.0 + 1.0 + 2.0);

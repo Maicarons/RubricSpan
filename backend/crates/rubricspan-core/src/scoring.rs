@@ -31,7 +31,7 @@ pub struct ScoringPoint {
     pub aliases: Vec<String>,
 }
 
-/// 本题相似度阈值（缺省用全局默认 0.90 / 0.75；全局默认可在管理后台调整）。
+/// 本题相似度阈值（缺省用全局默认 0.95 / 0.90；全局默认可在管理后台调整）。
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct Thresholds {
@@ -43,10 +43,10 @@ pub struct Thresholds {
 
 impl Thresholds {
     fn default_high() -> f64 {
-        0.90
+        0.95
     }
     fn default_low() -> f64 {
-        0.75
+        0.90
     }
 }
 

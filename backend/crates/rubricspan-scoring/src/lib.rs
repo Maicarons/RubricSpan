@@ -20,24 +20,29 @@ use serde::{Deserialize, Serialize};
 pub mod backend;
 pub mod option_rules;
 pub mod pipeline;
+pub mod preprocess;
 pub mod result;
 
 pub use backend::{InferenceBackend, MrcOutput, SimilarityOutput};
 pub use pipeline::{score_answer, score_answer_configured};
+pub use preprocess::strip_stem_spans;
 pub use result::{HitStatus, PointDetail, ScoreOutcome, ScoreSource};
 
 /// 全局默认阈值（题级配置可覆盖，见 contracts/model-artifacts.md）。
+///
+/// 默认从严（部署建议：偏松证据下先压误报，再观察召回损失）：
+/// τ_hi = 0.95、τ_lo = 0.90；管理后台与题级配置可调，但出厂默认取保守档。
 pub const DEFAULT_THRESHOLDS: Thresholds = Thresholds {
-    similarity_high: 0.90,
-    similarity_low: 0.75,
+    similarity_high: 0.95,
+    similarity_low: 0.90,
 };
 
 /// 默认部分命中给分比例（相似度虚高收紧后为四分之一分）。
 pub const DEFAULT_PARTIAL_CREDIT: f64 = 0.25;
 
 /// 默认 MRC `has_answer` 判定阈值：抽取置信度 ≥ 该值才判精确命中（hit_exact），
-/// 低于则回落相似度兜底。
-pub const DEFAULT_MRC_CONFIDENCE_THRESHOLD: f64 = 0.5;
+/// 低于则回落相似度兜底。默认从严取 0.8（与部署基线一致）。
+pub const DEFAULT_MRC_CONFIDENCE_THRESHOLD: f64 = 0.8;
 
 /// serde 缺省补齐：老版本 `scoring_settings.json` 无此字段时回落默认，其余字段不受影响。
 const fn default_mrc_confidence_threshold() -> f64 {
