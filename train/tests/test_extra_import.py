@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from rubricspan_train.data.import_extra import (  # noqa: E402
     import_agieval,
+    import_ceval,
     import_cmmlu,
     import_gaokao_bench,
     import_internlm_history,
@@ -202,3 +203,25 @@ def test_import_reciter_flattens_nested(tmp_path):
     assert fill["answer_text"] == "不过数仞而下；翱翔蓬蒿之间"
     poem = next(r for r in rows if r["type"] == "open")
     assert "学而时习之" in poem["answer_text"] and "温故而知新" in poem["answer_text"]
+
+
+def test_import_ceval(tmp_path):
+    d = tmp_path / "ceval"
+    (d / "dev").mkdir(parents=True)
+    (d / "val").mkdir(parents=True)
+    (d / "test").mkdir(parents=True)
+    (d / "dev" / "middle_school_history_dev.csv").write_text(
+        "id,question,A,B,C,D,answer,explanation\n"
+        "0,《凡尔赛和约》内容包括,①②④,①②③,①③④,②③④,B,1.历史事实…\n",
+        encoding="utf-8")
+    (d / "val" / "high_school_history_val.csv").write_text(
+        "id,question,A,B,C,D,answer\n"
+        "0,北宋前期土地政策,自然经济,自耕农受阻,重农抑商瓦解,土地质变,B\n",
+        encoding="utf-8")
+    (d / "test" / "middle_school_history_test.csv").write_text(
+        "id,question,A,B,C,D\n0,保密题,1,2,3,4\n", encoding="utf-8")
+    rows = import_ceval(tmp_path)
+    assert len(rows) == 2  # dev + val（test 无答案不入）
+    hist = next(r for r in rows if r["subject"] == "初中历史")
+    assert hist["answer_letter"] == "B" and hist["answer_text"] == "①②③"
+    assert all(r["split"] == "train" for r in rows)

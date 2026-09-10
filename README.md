@@ -91,5 +91,10 @@ pip install -r requirements.txt
 
 ## 许可证
 
-[AGPL-3.0](LICENSE) —— 本项目以 GNU Affero General Public License v3.0 发布。
+[AGPL-3.0](LICENSE) —— 本项目**代码**以 GNU Affero General Public License v3.0 发布。
 通过网络提供服务时，服务端修改后的源代码同样须向用户提供（见 LICENSE 第 13 条）。
+
+**模型权重**（MRC/相似度 ONNX，发布至 HF/ModelScope 厂库）以 **CC BY-NC-SA 4.0** 发布：
+训练数据含 CC BY-NC 4.0（CMMLU）与 CC BY-NC-SA 4.0（C-Eval）等非商业来源，模型发布许可
+对齐最严格的数据许可，保证**全部训练数据合规可用**；商业使用需另行取得相关数据集商业授权。
+完整数据集许可审计见 [docs/quality/licenses.md](docs/quality/licenses.md)。

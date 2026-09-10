@@ -79,7 +79,7 @@ All documentation lives under [`docs/`](docs/) and is published as a VitePress s
 - [Deployment Guide](docs/guides/deployment.md)
 - [Bad Cases](docs/quality/bad-cases.md)
 - [Contract Changelog](docs/quality/changelog-contracts.md)
-- [Licenses & Compliance](docs/licenses.md)
+- [Licenses & Compliance](docs/quality/licenses.md)
 
 ## Milestones
 

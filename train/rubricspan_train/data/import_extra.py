@@ -47,6 +47,7 @@ STATUS = {
     "agieval": "已下载：raw.githubusercontent（ruixiangcui/AGIEval，MIT，高考各科 jsonl）",
     "cmmlu": "已下载：raw.githubusercontent（haonan-li/CMMLU，无 LICENSE 文件，学术基准惯例，67 学科知识测试）",
     "reciter": "已下载：raw.githubusercontent（Binkic/Reciter，MIT，高考古诗文默写题库）",
+    "ceval": "已下载：ModelScope（OmniData/C-Eval，CC BY-NC-SA 4.0，dev/val 带答案入训、test 答案保密；模型发布许可已对齐 CC BY-NC-SA）",
     "ncr": "未下载：OpenI 仓仅元数据；数据在 Google Drive（需浏览器/授权下载）",
     "exams": "未下载：HF/TFDS 不可达；ModelScope 仅有 EXAMS-V（不同数据集）",
     "d175": "商业授权：数据堂 1.3 亿题，需购买/申请，不入训练",
@@ -132,11 +133,22 @@ def import_internlm_history(src: Path) -> list[dict]:
 
 
 def import_ncr(src: Path) -> list[dict]:
-    """NCR：中学语文阅读理解 MCQ。数据在 Google Drive，本地缺文件时仅记状态。"""
+    """NCR：中学语文阅读理解 MCQ。数据在 Google Drive（见 extra_sources/README.md），
+    本地缺文件时仅记状态；支持 `ncr/*.json` 任意文件名（train/dev/test 由文件名推断）。"""
     out = []
-    for fp in [src / "ncr" / "ncr_train.json", src / "ncr" / "ncr_dev.json", src / "ncr" / "ncr_test.json"]:
-        if not fp.exists():
-            continue
+    d = src / "ncr"
+    if not d.exists():
+        return out
+    for fp in sorted(d.glob("*.json")):
+        stem = fp.stem.lower()
+        if "train" in stem:
+            split = "train"
+        elif "dev" in stem or "valid" in stem:
+            split = "dev"
+        elif "test" in stem:
+            split = "test"
+        else:
+            split = "train"
         n = 0
         data = json.loads(fp.read_text(encoding="utf-8"))
         for art in data:
@@ -148,7 +160,7 @@ def import_ncr(src: Path) -> list[dict]:
                     "choices": {ch[0]: ch[2:].strip() for ch in q.get("Choices", []) if len(ch) >= 2},
                     "answer_letter": (q.get("Answer") or "").strip() or None,
                     "answer_text": "", "explanation": "",
-                    "difficulty": art.get("Diff"), "split": fp.stem.split("_")[-1], "note": "",
+                    "difficulty": art.get("Diff"), "split": split, "note": "",
                 })
                 n += 1
     return out
@@ -374,6 +386,51 @@ def import_reciter(src: Path) -> list[dict]:
     return out
 
 
+def import_ceval(src: Path) -> list[dict]:
+    """C-Eval（CC BY-NC-SA 4.0）：各学段知识测试 CSV（dev/val 带答案；test 答案保密不入训）。
+
+    只取文科 12 科；dev/val 全部入 train（模型发布许可已对齐 CC BY-NC-SA）。
+    """
+    SUBJ_CN = {
+        "art_studies": "艺术", "chinese_language_and_literature": "中国语言文学",
+        "education_science": "教育科学", "high_school_chinese": "高中语文",
+        "high_school_geography": "高中地理", "high_school_history": "高中历史",
+        "high_school_politics": "高中政治", "law": "法学",
+        "middle_school_geography": "初中地理", "middle_school_history": "初中历史",
+        "middle_school_politics": "初中政治", "modern_chinese_history": "中国近现代史",
+    }
+    out = []
+    n = 0
+    d = src / "ceval"
+    if not d.exists():
+        return out
+    for split_dir, suffix in (("dev", "dev"), ("val", "val")):
+        for fp in sorted((d / split_dir).glob("*.csv")):
+            stem = fp.stem.removesuffix(f"_{suffix}")
+            subject = SUBJ_CN.get(stem)
+            if subject is None:
+                continue  # 只取文科科目
+            stage = "初中" if stem.startswith("middle_school") else ("高中" if stem.startswith("high_school") else "其他")
+            with fp.open(encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    q = (row.get("question") or "").strip()
+                    if not q:
+                        continue
+                    choices = {k: (row.get(k) or "").strip() for k in "ABCD" if (row.get(k) or "").strip()}
+                    ans_letter = (row.get("answer") or "").strip() or None
+                    out.append({
+                        "source": "ceval", "subject": subject, "stage": stage,
+                        "qid": _norm_qid("ceval", n), "type": "choice",
+                        "question": q, "material": "",
+                        "choices": choices or None, "answer_letter": ans_letter,
+                        "answer_text": choices.get(ans_letter, "") if ans_letter else "",
+                        "explanation": (row.get("explanation") or "").strip(),
+                        "difficulty": None, "split": "train", "note": "C-Eval（CC BY-NC-SA 4.0）",
+                    })
+                    n += 1
+    return out
+
+
 ADAPTERS = {
     "m3ke": import_m3ke,
     "internlm-history": import_internlm_history,
@@ -381,6 +438,7 @@ ADAPTERS = {
     "agieval": import_agieval,
     "cmmlu": import_cmmlu,
     "reciter": import_reciter,
+    "ceval": import_ceval,
     "ncr": import_ncr,
     "exams": import_exams,
 }

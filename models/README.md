@@ -38,6 +38,13 @@
 PP-OCRv6 det/rec 由 `rapidocr-core` 在缺失时**自动从 ModelScope 下载**，不在此厂库中维护。
 本地 `models/ocr/` 仅为镜像缓存。
 
+## 许可
+
+厂库模型权重以 **CC BY-NC-SA 4.0** 发布（`model_card.json` 的 `license` 字段同）：
+训练数据含 CC BY-NC 4.0（CMMLU）与 CC BY-NC-SA 4.0（C-Eval）等非商业来源，模型发布许可
+对齐最严格数据许可以保证全部训练数据合规可用；商业使用需另行取得相关数据集商业授权
+（完整审计见 [docs/quality/licenses.md](../docs/quality/licenses.md)）。
+
 ## 取证与复现
 
 训练中间产物与基座权重（`artifacts/`、`backbone/`）已由 `.gitignore` 隔离，

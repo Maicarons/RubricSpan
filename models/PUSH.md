@@ -18,7 +18,7 @@ git -C /g/GitHub/rubricspan-mrc-onnx lfs ls-files     # *.onnx 应在 LFS 列表
 ## 1. Hugging Face
 
 1. 网页 https://huggingface.co/new 建同名空模型仓：
-   `rubricspan-mrc-onnx`、`rubricspan-similarity-onnx`，License = Apache-2.0；
+   `rubricspan-mrc-onnx`、`rubricspan-similarity-onnx`，**License = CC BY-NC-SA 4.0**；
 2. 生成写权限 token（Settings → Access Tokens，Role = Write）；
 3. 推送（token 仅作 remote 凭据，不进仓库）：
 
@@ -34,7 +34,7 @@ similarity 仓库同理（`git remote add hf .../rubricspan-similarity-onnx`）�
 
 ## 2. ModelScope
 
-1. 网页 https://www.modelscope.cn/models/create 建同名模型仓（类型=模型，License=Apache-2.0）；
+1. 网页 https://www.modelscope.cn/models/create 建同名模型仓（类型=模型，License=CC BY-NC-SA 4.0）；
 2. 获取 token（网页 → 头像 → 访问令牌，需开启「模型创建/管理」权限）；
 3. 推送（ModelScope 使用 `oauth2` 用户 + token 作为口令）：
 
