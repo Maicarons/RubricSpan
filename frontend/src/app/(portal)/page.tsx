@@ -91,7 +91,7 @@ const techPoints = [
 function HeroPaper() {
   return (
     <div className="relative mx-auto w-full max-w-md animate-scale-in lg:mx-0">
-      <div className="relative z-10 rotate-1 rounded-2xl border border-line bg-surface p-6 shadow-card-hover">
+      <div className="relative z-10 -rotate-1 rounded-2xl border border-line bg-surface/90 p-6 shadow-card-hover backdrop-blur-sm transition-shadow duration-300 hover:shadow-pop">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="font-mono text-xs text-ink-3">Q001 · 历史 · 满分 5 分</div>
@@ -121,7 +121,7 @@ function HeroPaper() {
           </div>
         </div>
       </div>
-      <div className="absolute -bottom-5 -left-4 -rotate-3 rounded-xl border border-line bg-surface px-4 py-3 shadow-pop">
+      <div className="absolute -bottom-5 -left-4 rotate-2 rounded-xl border border-line bg-surface px-4 py-3 shadow-pop transition-all duration-300 hover:scale-105">
         <div className="text-xs font-medium text-ink-2">得分点 1 · 精确命中</div>
         <div className="mt-0.5 font-mono text-xs text-ok">MRC 置信度 0.982</div>
       </div>
@@ -139,22 +139,31 @@ export default function PortalHomePage() {
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgb(var(--accent)/0.10),transparent_42%),radial-gradient(circle_at_85%_75%,rgb(var(--accent)/0.08),transparent_45%)]"
         />
+        {/* 装饰性浮动圆点 */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -left-20 top-1/4 h-64 w-64 rounded-full border border-accent/10 opacity-30"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-32 top-1/3 h-96 w-96 rounded-full border border-accent/8 opacity-20"
+        />
         <div className="relative mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 px-6 py-16 lg:grid-cols-[1.1fr_0.9fr] lg:py-24">
           <div>
             <Badge tone="accent" className="animate-fade-up">
               主观题智能阅卷平台
             </Badge>
             <h1
-              className="mt-5 animate-fade-up font-serif text-4xl font-bold leading-[1.25] tracking-wide text-ink sm:text-5xl"
+              className="mt-5 animate-fade-up font-serif text-4xl font-bold leading-[1.25] tracking-wide text-ink sm:text-5xl lg:text-6xl"
               style={{ animationDelay: "60ms" }}
             >
               让每一次阅卷，
               <br />
               都有据可依
-              <span aria-hidden="true" className="ml-2 inline-block h-[0.4em] w-2 rounded-full bg-accent align-baseline" />
+              <span aria-hidden="true" className="ml-2 inline-block h-[0.4em] w-2.5 rounded-full bg-accent align-baseline" />
             </h1>
             <p
-              className="mt-5 max-w-xl animate-fade-up text-base leading-relaxed text-ink-2"
+              className="mt-5 max-w-xl animate-fade-up text-base leading-relaxed text-ink-2 lg:text-lg"
               style={{ animationDelay: "120ms" }}
             >
               从录入试题、解析标准答案，到逐点评分与结果复盘——全流程本地推理，
@@ -163,21 +172,21 @@ export default function PortalHomePage() {
             <div className="mt-8 flex animate-fade-up flex-wrap items-center gap-3" style={{ animationDelay: "180ms" }}>
               <Link
                 href="/questions"
-                className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink shadow-sm transition-colors hover:bg-accent-strong"
+                className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-3 text-sm font-medium text-accent-ink shadow-sm transition-all duration-200 hover:bg-accent-strong hover:shadow-md active:scale-[0.97]"
               >
                 进入工作台
                 <IconArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 href="/offline"
-                className="inline-flex items-center gap-2 rounded-lg border border-line-strong bg-surface px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:border-accent hover:text-accent"
+                className="inline-flex items-center gap-2 rounded-lg border border-line-strong bg-surface px-5 py-3 text-sm font-medium text-ink transition-all duration-200 hover:border-accent hover:text-accent hover:shadow-sm active:scale-[0.97]"
               >
                 离线演示
               </Link>
             </div>
             <dl className="mt-10 grid animate-fade-up grid-cols-3 gap-4 border-t border-line pt-6" style={{ animationDelay: "240ms" }}>
               {stats.map((s) => (
-                <div key={s.label}>
+                <div key={s.label} className="transition-all duration-200 hover:translate-y-[-2px]">
                   <dd className="font-serif text-2xl font-bold text-ink sm:text-3xl">{s.value}</dd>
                   <dt className="mt-1 text-xs text-ink-2">{s.label}</dt>
                   <dt className="text-[10px] text-ink-3">{s.note}</dt>
@@ -204,11 +213,11 @@ export default function PortalHomePage() {
             <Link
               key={m.href}
               href={m.href}
-              className="group animate-fade-up rounded-xl border border-line bg-surface p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/60 hover:shadow-card-hover"
+              className="group animate-fade-up rounded-xl border border-line bg-surface p-5 shadow-card transition-all duration-200 hover:-translate-y-1 hover:border-accent/60 hover:shadow-card-hover"
               style={{ animationDelay: `${i * 60}ms` }}
             >
               <div className="flex items-center gap-3">
-                <span className="rounded-lg bg-accent-soft p-2.5 text-accent transition-colors group-hover:bg-accent group-hover:text-accent-ink">
+                <span className="rounded-lg bg-accent-soft p-2.5 text-accent transition-colors duration-200 group-hover:bg-accent group-hover:text-accent-ink">
                   {m.icon}
                 </span>
                 <span className="font-serif text-lg font-semibold text-ink">{m.title}</span>
@@ -217,22 +226,6 @@ export default function PortalHomePage() {
               <p className="mt-3 text-sm leading-relaxed text-ink-2">{m.desc}</p>
             </Link>
           ))}
-          <Link
-            href="/admin"
-            className="group flex animate-fade-up flex-col justify-between rounded-xl border border-dashed border-line-strong p-5 transition-colors duration-200 hover:border-accent/60 hover:bg-surface"
-            style={{ animationDelay: `${modules.length * 60}ms` }}
-          >
-            <div className="flex items-center gap-3">
-              <span className="rounded-lg bg-surface-2 p-2.5 text-ink-2 transition-colors group-hover:text-accent">
-                <IconGauge className="h-5 w-5" />
-              </span>
-              <span className="font-serif text-lg font-semibold text-ink">管理后台</span>
-              <IconArrowRight className="ml-auto h-4 w-4 text-ink-3 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-accent" />
-            </div>
-            <p className="mt-3 text-sm leading-relaxed text-ink-2">
-              运行统计、系统状态与服务设置——服务级运行视图。
-            </p>
-          </Link>
         </div>
       </section>
 
@@ -249,7 +242,7 @@ export default function PortalHomePage() {
             {workflow.map((w, i) => (
               <li key={w.title} className="relative animate-fade-up" style={{ animationDelay: `${i * 80}ms` }}>
                 <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-accent/60 bg-accent-soft font-kai text-lg font-bold text-accent">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-accent/60 bg-accent-soft font-kai text-lg font-bold text-accent transition-all duration-200 group-hover:bg-accent group-hover:text-accent-ink">
                     {w.step}
                   </span>
                   <h3 className="font-serif text-base font-semibold text-ink">{w.title}</h3>
@@ -279,7 +272,7 @@ export default function PortalHomePage() {
           {techPoints.map((t, i) => (
             <div
               key={t.title}
-              className="animate-fade-up rounded-xl border border-line bg-surface p-5 shadow-card"
+              className="animate-fade-up rounded-xl border border-line bg-surface p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-card-hover"
               style={{ animationDelay: `${i * 60}ms` }}
             >
               <span className="inline-flex rounded-lg bg-surface-2 p-2.5 text-accent">{t.icon}</span>
@@ -292,7 +285,7 @@ export default function PortalHomePage() {
 
       {/* ------------------------------------------------ CTA */}
       <section className="mx-auto max-w-6xl px-6 pb-4">
-        <div className="animate-fade-up overflow-hidden rounded-2xl border border-accent/30 bg-gradient-to-br from-accent-soft via-surface to-surface p-8 text-center sm:p-12">
+        <div className="animate-fade-up overflow-hidden rounded-2xl border border-accent/30 bg-gradient-to-br from-accent-soft via-surface to-surface p-8 text-center shadow-card transition-all duration-300 hover:shadow-card-hover sm:p-12">
           <h2 className="font-serif text-2xl font-bold tracking-wide text-ink sm:text-3xl">
             从第一道试题开始
           </h2>
@@ -302,16 +295,10 @@ export default function PortalHomePage() {
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <Link
               href="/questions"
-              className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink shadow-sm transition-colors hover:bg-accent-strong"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-3 text-sm font-medium text-accent-ink shadow-sm transition-all duration-200 hover:bg-accent-strong hover:shadow-md active:scale-[0.97]"
             >
               新建试题
               <IconArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              href="/admin"
-              className="inline-flex items-center gap-2 rounded-lg border border-line-strong bg-surface px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:border-accent hover:text-accent"
-            >
-              查看管理后台
             </Link>
           </div>
         </div>

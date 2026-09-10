@@ -13,7 +13,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   return (
     <div className="flex min-h-screen flex-col">
       <PortalNav />
-      {children}
+      <div className="pt-16">{children}</div>
       <footer className="mt-16 border-t border-line bg-canvas-deep/60">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-8 text-center sm:flex-row sm:text-left">
           <div className="flex flex-col items-center gap-2 sm:items-start">
@@ -26,10 +26,6 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             <span>AGPL-3.0</span>
             <span aria-hidden="true" className="h-3 w-px bg-line-strong" />
             <span>Rust 引擎 · Next.js 前端</span>
-            <span aria-hidden="true" className="h-3 w-px bg-line-strong" />
-            <a href="/admin" className="text-ink-2 transition-colors hover:text-accent">
-              管理后台
-            </a>
           </div>
         </div>
       </footer>

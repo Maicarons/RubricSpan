@@ -11,7 +11,7 @@ import {
   IconCloudOff,
   IconMenu,
   IconPen,
-  IconShield,
+  IconSparkle,
   IconUpload,
   IconX,
 } from "@/components/icons";
@@ -78,14 +78,6 @@ function NavItems({ pathname, onNavigate }: { pathname: string; onNavigate?: () 
 function SidebarFooter() {
   return (
     <div className="border-t border-line p-3">
-      <Link
-        href="/admin"
-        className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
-      >
-        <IconShield className="h-[18px] w-[18px] text-ink-3" />
-        管理后台
-        <span className="ml-auto rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] text-ink-3">admin</span>
-      </Link>
       <Link
         href="/"
         className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
@@ -181,14 +173,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <span aria-hidden="true" className={`h-2 w-2 rounded-full ${serviceUi[service].dot}`} />
                 {serviceUi[service].label}
               </span>
-              <Link
-                href="/admin"
-                aria-label="管理后台"
-                title="管理后台"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
-              >
-                <IconShield className="h-[18px] w-[18px]" />
-              </Link>
+              <span className="hidden items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent-strong sm:inline-flex">
+                <IconSparkle className="h-3 w-3" /> 演示
+              </span>
               <ThemeToggle />
             </div>
           </div>
