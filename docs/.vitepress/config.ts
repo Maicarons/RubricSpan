@@ -7,7 +7,9 @@ export default defineConfig({
   description: '中文主观题智能阅卷系统 · 项目文档',
   lang: 'zh-CN',
   cleanUrls: true,
-  head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }]],
+  // GitHub Pages 项目站点子路径：资源/路由须带 /RubricSpan/ 前缀，否则 CSS/JS 全部 404
+  base: '/RubricSpan/',
+  head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/RubricSpan/favicon.svg' }]],
   themeConfig: {
     socialLinks: [
       { icon: 'github', link: 'https://github.com/Maicarons/RubricSpan' },
