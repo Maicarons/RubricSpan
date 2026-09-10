@@ -1,6 +1,15 @@
 # RubricSpan · 阅微 —— 主观题阅卷教师模型
 
+[![AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-vitepress-42b883)](https://maicarons.github.io/RubricSpan/)
+[![Models](https://img.shields.io/badge/models-HF%20%7C%20MS-ff4f00)](https://huggingface.co/Maicarons)
+
 > 面向中文主观题（文科简答题 / 论述题 / 材料解析题）的**本地化智能阅卷系统**：大模型离线生成训练标签，训练轻量编码器模型，在普通 PC / 本地 GPU 上完成"上传试卷 → 作答识别 → 自动评分 → 审阅反馈"闭环。
+
+**仓库** [github.com/Maicarons/RubricSpan](https://github.com/Maicarons/RubricSpan) ·
+**文档站** [maicarons.github.io/RubricSpan](https://maicarons.github.io/RubricSpan/) ·
+**模型** [Hugging Face](https://huggingface.co/Maicarons/RubricSpan-mrc-1.0-flash) / [ModelScope](https://www.modelscope.cn/models/Mai2026/RubricSpan-mrc-1.0-flash)（`RubricSpan-{mrc,similarity}-1.0-flash`）
+**版本** [v1.0.0](https://github.com/Maicarons/RubricSpan/releases/tag/v1.0.0)
 
 ## 核心特性
 

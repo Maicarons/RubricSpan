@@ -9,13 +9,23 @@ export default defineConfig({
   cleanUrls: true,
   head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }]],
   themeConfig: {
+    socialLinks: [
+      { icon: 'github', link: 'https://github.com/Maicarons/RubricSpan' },
+    ],
     nav: [
+      { text: '博客', link: '/blog/2026-09-10-v1.0-flash' },
       { text: '入门', link: '/guides/getting-started' },
       { text: '技术方案', link: '/project/plan' },
       { text: '执行计划', link: '/project/execution-plan' },
       { text: '里程碑', link: '/milestones/milestone-m7-review' },
     ],
     sidebar: [
+      {
+        text: '博客',
+        items: [
+          { text: '一支红笔的余温（2026-09-10 · 教师节）', link: '/blog/2026-09-10-v1.0-flash' },
+        ],
+      },
       {
         text: '项目',
         items: [
