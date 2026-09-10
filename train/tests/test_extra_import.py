@@ -15,6 +15,7 @@ from rubricspan_train.data.import_extra import (  # noqa: E402
     import_gaokao_bench,
     import_internlm_history,
     import_m3ke,
+    import_ncr,
     import_reciter,
 )
 from rubricspan_train.data.extra_processed import (  # noqa: E402
@@ -225,3 +226,29 @@ def test_import_ceval(tmp_path):
     hist = next(r for r in rows if r["subject"] == "初中历史")
     assert hist["answer_letter"] == "B" and hist["answer_text"] == "①②③"
     assert all(r["split"] == "train" for r in rows)
+
+
+def test_import_ncr_split_by_filename(tmp_path):
+    d = tmp_path / "ncr"
+    d.mkdir(parents=True)
+    # train 文件名不带 split 词 → 默认 train；test_2 含 test → test
+    (d / "train.json").write_text(json.dumps([{
+        "ID": 1, "Content": "周鼎传……公讳鼎。",
+        "Questions": [{
+            "Question": "文中“屏”的意思是", "Choices": ["A、屏住呼吸", "B、收敛行迹"],
+            "Answer": "B", "Q_id": "000101",
+        }],
+    }], ensure_ascii=False), encoding="utf-8")
+    (d / "test_2.json").write_text(json.dumps([{
+        "ID": 2, "Content": "另一篇材料……",
+        "Questions": [{
+            "Question": "第④段断句正确的一项是", "Choices": ["A、立捕两奴/及舟", "B、立捕两奴及舟械"],
+            "Answer": "B", "Q_id": "000201",
+        }],
+    }], ensure_ascii=False), encoding="utf-8")
+    rows = import_ncr(tmp_path)
+    assert len(rows) == 2
+    tr = next(r for r in rows if r["split"] == "train")
+    assert tr["answer_letter"] == "B" and tr["material"] == "周鼎传……公讳鼎。"
+    assert tr["choices"] == {"A": "屏住呼吸", "B": "收敛行迹"}
+    assert any(r["split"] == "test" for r in rows)

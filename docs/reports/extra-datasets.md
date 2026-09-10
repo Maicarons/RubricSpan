@@ -19,7 +19,7 @@
 | **CMMLU** | 北理工/厦门理工等 | **67 学科知识测试**（初高中+大学文科知识问答） | **CC BY-NC 4.0**（HF 元数据） | ✅ 40 CSV 859KB | **入训练（文科 20 科；模型许可已对齐 NC）** |
 | **Reciter** | 社区 | **高考古诗文默写题库**（137 篇默写篇目 + 472 理解性默写） | MIT | ✅ 2 文件 308KB | **入训练（语文知识）** |
 | **C-Eval** | 上交 | **各学段知识测试**（含初高中文科 12 科；dev/val 带答案） | **CC BY-NC-SA 4.0** | ✅ ModelScope 3.1MB | **入训练（模型许可已对齐 NC-SA）** |
-| NCR | 鹏城实验室 OpenI | 8388 文章 / 20477 中学语文阅读题（choice） | **未标注（需确认）** | ⏳ Google Drive 需授权 | 适配器就绪；待数据+许可确认 |
+| **NCR** | 鹏城实验室 OpenI | 8388 文章 / 20477 中学语文阅读题（choice，带 passage 材料） | **未标注（建议联系作者确认）** | ✅ Google Drive 已下载（train 30M/dev 4.8M/test 4.9M） | **入训练（许可待确认注记）** |
 | EXAMS | 多语言考试问答 | 24 学科多选题 | CC BY-SA 4.0 | ⏳ multilingual 无中文行 | 适配器就绪；zh 经 TFDS 分发不可达 |
 | D175 | 数据堂 | 1.3 亿题（K12+大学职业） | **商业授权** | ⛔ OpenCSG 仓仅元数据 | **不入训练**（需购买） |
 | CEAMC | 华东师大 | 226 篇议论文论证标注+得分 | 未公开 | ⛔ 论文/仓库均无数据链接 | **需联系作者** |
@@ -38,8 +38,9 @@ source/subject/stage/qid/type/question/material/choices/answer_letter/answer_tex
 | CMMLU | 3,540 | 文科 20 科 CSV（Question,A-D,Answer） |
 | Reciter | 609 | 472 理解性默写（fill）+ 137 默写篇目（open） |
 | C-Eval | 324 | 文科 12 科 dev+val CSV（带 answer/explanation；test 答案保密） |
+| NCR | 20,477 | 中学语文阅读 choice（Content→材料，Choices/Answer 解析） |
 
-合计 **47,872** 条。GAOKAO-Bench 主观题是**文科主观题+参考答案**——
+合计 **68,349** 条。GAOKAO-Bench 主观题是**文科主观题+参考答案**——
 与本项目"评分点表述"形态直接同构（2010-2022 高考历史/政治/地理/语文）。
 
 ## 3. 与 SAS-Bench 去重
@@ -51,8 +52,8 @@ SAS-Bench 现有 1,018 题（归一化题干）：外部题与其**完全重合 
 
 | 产物 | 条数 | 构成 | 用途 |
 |---|---|---|---|
-| `extra_similarity_pairs.jsonl` | 86,456（正 27,575 / 负 58,881） | M3KE dev 题干↔选项（+346/+1,047）；InternLM-History 题干↔考点正例+跨考点负例（+20,813/+41,626）；GAOKAO-Bench 客观↔选项（+1,044/+1,941）与主观题干↔参考答案（+397）；AGIEval（+937/+2,777）；CMMLU（+3,504/+10,524）；**C-Eval（+322/+966）**；Reciter 默写（+609） | 相似度兜底"学生答错但表述沾边"拒判（BC-002 同族）；高考主观题参考答案对增强"得分点表述"语义 |
-| `extra_mrc_negatives.jsonl` | 7,329（train 5,781） | InternLM-History 考点负例（6,807，train 5,259）+ AGIEval 阅读材料负例（522，train） | 补强 MRC has_answer 头对"材料中无答案 span"的判别 |
+| `extra_similarity_pairs.jsonl` | 168,121（正 48,030 / 负 120,091） | M3KE dev 题干↔选项（+346/+1,047）；InternLM-History 题干↔考点正例+跨考点负例（+20,813/+41,626）；GAOKAO-Bench 客观↔选项（+1,044/+1,941）与主观题干↔参考答案（+397）；AGIEval（+937/+2,777）；CMMLU（+3,504/+10,524）；C-Eval（+322/+966）；**NCR 题干↔选项（+20,455/+61,210）**；Reciter 默写（+609） | 相似度兜底"学生答错但表述沾边"拒判（BC-002 同族）；高考主观题参考答案对增强"得分点表述"语义 |
+| `extra_mrc_negatives.jsonl` | 27,806（train 21,200） | InternLM-History 考点负例（6,807）+ AGIEval 阅读材料负例（522）+ **NCR 阅读材料负例（20,477，答案字母非 span）** | 补强 MRC has_answer 头对"材料中无答案 span"的判别 |
 
 设计原则：**不扰动主 build**（data/build.py 的固定种子与 question_id 划分保持原样），
 另立文件 + 训练入口显式 opt-in。
@@ -79,8 +80,7 @@ python -m rubricspan_train.training.train_mrc --stage main --strip-stems \
 
 ## 6. 后续工作
 
-1. NCR：数据在 Google Drive（需授权下载，链接与放置位置见 `data/raw/extra_sources/README.md`）；
-   许可未标注，建议与作者确认后入训；
+1. NCR：数据已下载并入训（train/dev/test 20,477 题）；许可未标注，建议与作者确认后正式引用；
 2. EXAMS：zh 配置经 TFDS 分发（本机不可达），网络恢复或镜像可用后补取；
 3. **中考真题**：GitHub 上无成规模的开源中考题库（社区仓库为 JS/HTML 内嵌、体量小）；
    初中段由 InternLM-History（2022 中考历史）+ C-Eval 初中文科 + NCR 覆盖；
