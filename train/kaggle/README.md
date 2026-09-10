@@ -93,7 +93,7 @@ pip install huggingface_hub hf_transfer
 python train/kaggle/publish_to_hf.py --user <HF用户名>
 
 # 或 CLI 直接传
-hf upload <HF用户名>/rubricspan-mrc-onnx <本地厂库目录>/ --repo-type model
+hf upload <HF用户名>/RubricSpan-mrc-1.0-flash <本地厂库目录>/ --repo-type model
 ```
 
 每次 upload 即一个 commit，可在 Hub 上回滚。

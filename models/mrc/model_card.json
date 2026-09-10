@@ -1,6 +1,6 @@
 {
-  "name": "mrc-mengzi-bert",
-  "version": "2026.08.23",
+  "name": "RubricSpan-mrc-1.0-flash",
+  "version": "1.0-flash",
   "base_model": "Langboat/mengzi-bert-base",
   "task": "mrc_extraction",
   "max_seq_length": 512,

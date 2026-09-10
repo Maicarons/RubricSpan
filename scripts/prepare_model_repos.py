@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """整理本地模型产物 → 两个自足的 **LFS 厂库**（供上传到 HF / ModelScope）。
 
-在仓库根目录的**同级**目录生成（默认 G:\GitHub\\rubricspan-<mrc|similarity>-onnx），
+在仓库根目录的**同级**目录生成（默认 G:\GitHub\RubricSpan-<mrc|similarity>-1.0-flash），
 模型文件绝不进入 RubricSpan 的 GitHub 仓库——GitHub 侧只留 models/README.md 链接。
 
 做了什么：
@@ -25,8 +25,8 @@ REPO = Path(__file__).resolve().parent.parent
 MODELS = REPO / "models"
 
 SPECS = [
-    ("mrc", "rubricspan-mrc-onnx", "MRC 抽取模型（mengzi-bert-base 微调）", "mrc_extraction"),
-    ("similarity", "rubricspan-similarity-onnx", "语义相似度模型（text2vec 微调）", "sentence_similarity"),
+    ("mrc", "RubricSpan-mrc-1.0-flash", "MRC 抽取模型（mengzi-bert-base 微调）", "mrc_extraction"),
+    ("similarity", "RubricSpan-similarity-1.0-flash", "语义相似度模型（text2vec 微调）", "sentence_similarity"),
 ]
 ONNX = ["model.onnx", "model.int8.onnx", "model.fp16.onnx"]
 TIERS = [
@@ -71,8 +71,9 @@ README_TMPL = """# {repo} · {title}
 
 ## 许可证
 
-Apache-2.0。基座模型版权归原作者（{base_attr}）；本仓为 RubricSpan 项目的训练导出物，
-发布仅用于教育/研究场景，使用请保留基座署名。
+**CC BY-NC-SA 4.0**。训练数据含 CC BY-NC 4.0（CMMLU）与 CC BY-NC-SA 4.0（C-Eval）等
+非商业来源，模型发布许可对齐最严格数据许可；可自由使用/分享（须署名、非商业、同协议共享），
+商业使用需另行取得相关数据集商业授权。基座模型版权归原作者（{base_attr}），使用请保留基座署名。
 """
 
 

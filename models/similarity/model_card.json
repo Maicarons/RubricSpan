@@ -1,6 +1,6 @@
 {
-  "name": "similarity-text2vec-base-chinese",
-  "version": "2026.08.23",
+  "name": "RubricSpan-similarity-1.0-flash",
+  "version": "1.0-flash",
   "base_model": "shibing624/text2vec-base-chinese",
   "task": "sentence_similarity",
   "pooling": "mean (推理侧按 attention_mask 池化)",

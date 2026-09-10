@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _env import load_repo_env  # noqa: E402
 
 load_repo_env()
-REPOS = {"mrc": "rubricspan-mrc-onnx", "similarity": "rubricspan-similarity-onnx"}
+REPOS = {"mrc": "RubricSpan-mrc-1.0-flash", "similarity": "RubricSpan-similarity-1.0-flash"}
 
 
 def main(argv: list[str] | None = None) -> int:
