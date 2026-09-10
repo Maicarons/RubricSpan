@@ -29,6 +29,8 @@ pub use sql::{MySqlStorage, SqliteStorage};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Question {
     pub question_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<String>,
     pub content: String,
     pub subject: String,
     pub total_score: f64,
@@ -81,6 +83,21 @@ pub struct Answer {
     pub source: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ocr_text: Option<String>,
+}
+
+/// 工程项目 —— 教师每次阅卷任务创建一个工程，工程内含试题/答卷/评分结果。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Project {
+    pub project_id: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject: Option<String>,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub status: String, // "active", "archived", "completed"
 }
 
 /// 评分结果（对应 openapi.yaml 的 ScoreResult）。
@@ -178,6 +195,12 @@ pub trait Storage: Send + Sync {
     async fn get_ocr(&self, qid: &str) -> Option<OcrResult>;
     /// 管理后台聚合统计（/api/admin/stats 使用）。
     async fn stats(&self) -> AdminStats;
+    async fn delete_question(&self, id: &str) -> Result<()>;
+    async fn delete_answer(&self, id: &str) -> Result<()>;
+    async fn save_project(&self, p: Project) -> Result<()>;
+    async fn list_projects(&self) -> Vec<Project>;
+    async fn get_project(&self, id: &str) -> Option<Project>;
+    async fn delete_project(&self, id: &str) -> Result<()>;
 }
 
 /// 纯内存 + JSON 文件落盘实现（M4 遗留；M8.1 起仅作临时兼容/演示，主路径用 SQL 后端）。
@@ -193,6 +216,7 @@ struct State {
     answers: HashMap<String, Answer>,
     results: HashMap<String, ScoreRecord>,
     ocr: HashMap<String, OcrResult>,
+    projects: HashMap<String, Project>,
 }
 
 impl MemoryStorage {
@@ -304,6 +328,57 @@ impl Storage for MemoryStorage {
         let results: Vec<ScoreRecord> = s.results.values().cloned().collect();
         compute_stats(&questions, s.answers.len(), &results)
     }
+
+    async fn delete_question(&self, id: &str) -> Result<()> {
+        {
+            let mut state = self.inner.lock().unwrap();
+            state.questions.remove(id);
+            state.configs.remove(id);
+            // remove associated answers and results
+            state.answers.retain(|_, a| a.question_id != id);
+            state.results.retain(|_, r| r.question_id != id);
+        }
+        self.flush().await;
+        Ok(())
+    }
+
+    async fn delete_answer(&self, id: &str) -> Result<()> {
+        {
+            let mut state = self.inner.lock().unwrap();
+            state.answers.remove(id);
+            state.results.remove(id);
+        }
+        self.flush().await;
+        Ok(())
+    }
+
+    async fn save_project(&self, p: Project) -> Result<()> {
+        {
+            let mut state = self.inner.lock().unwrap();
+            state.projects.insert(p.project_id.clone(), p);
+        }
+        self.flush().await;
+        Ok(())
+    }
+    async fn list_projects(&self) -> Vec<Project> {
+        let state = self.inner.lock().unwrap();
+        let mut v: Vec<Project> = state.projects.values().cloned().collect();
+        v.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        v
+    }
+    async fn get_project(&self, id: &str) -> Option<Project> {
+        let state = self.inner.lock().unwrap();
+        state.projects.get(id).cloned()
+    }
+    async fn delete_project(&self, id: &str) -> Result<()> {
+        {
+            let mut state = self.inner.lock().unwrap();
+            state.projects.remove(id);
+            state.questions.retain(|_, q| q.project_id.as_deref() != Some(id));
+        }
+        self.flush().await;
+        Ok(())
+    }
 }
 
 /// 聚合统计公共计算（三个存储实现共用，保证分桶/命中口径一致）。
@@ -388,6 +463,7 @@ mod tests {
         let s = MemoryStorage::new(None);
         s.save_question(Question {
             question_id: "Q1".into(),
+            project_id: None,
             content: "题".into(),
             subject: "历史".into(),
             total_score: 5.0,
@@ -398,6 +474,7 @@ mod tests {
         .unwrap();
         s.save_question(Question {
             question_id: "Q2".into(),
+            project_id: None,
             content: "题".into(),
             subject: "历史".into(),
             total_score: 5.0,
@@ -463,6 +540,7 @@ mod tests {
             assert!(i <= 1); // 覆盖语义循环仅两轮
             s.save_question(Question {
                 question_id: "Q1".into(),
+                project_id: None,
                 content: (*content).into(),
                 subject: "历史".into(),
                 total_score: 5.0,
@@ -474,6 +552,7 @@ mod tests {
         }
         s.save_question(Question {
             question_id: "Q2".into(),
+            project_id: None,
             content: "题二".into(),
             subject: "地理".into(),
             total_score: 10.0,

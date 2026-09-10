@@ -8,10 +8,10 @@ use std::sync::Arc;
 
 use axum::{
     body::Bytes,
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
-    response::{IntoResponse, Response},
-    routing::{get, post, put},
+    response::{IntoResponse, Redirect, Response},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use rubricspan_core::{ApiError, scoring::ScoringConfig};
@@ -19,12 +19,14 @@ use rubricspan_inference::LlmClient;
 use rubricspan_scoring::{
     backend::InferenceBackend,
     result::{Rating, ScoreOutcome},
-    score_answer_configured, ScoringSettings,
+    score_answer_configured, strip_stem_spans, ScoringSettings,
 };
 use rubricspan_storage::{ConfigStatus, Storage};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::path::PathBuf;
 use tokio::task::spawn_blocking;
+use tower_http::services::ServeDir;
 
 /// 共享应用状态。
 pub struct AppState {
@@ -45,20 +47,20 @@ pub struct AppState {
 }
 
 /// 构建完整路由表。
-pub fn router(state: AppState) -> Router {
+/// `admin_dir` 为管理后台静态文件目录（如 `../frontend-admin/out`），
+/// 存在时自动挂载 `/admin/` 静态服务；不存在时静默跳过（仅 API 模式）。
+pub fn router(state: AppState, admin_dir: Option<PathBuf>) -> Router {
     let infer_concurrency = std::env::var("RUBRICSPAN_INFER_CONCURRENCY")
         .ok()
         .and_then(|v| v.trim().parse::<usize>().ok())
         .unwrap_or(4)
         .clamp(1, 32);
-    Router::new()
+    let mut app = Router::new()
         .route("/api/questions", get(list_questions).post(create_question))
         .route("/api/standard-answer/parse", post(parse_standard_answer))
         .route("/api/standard-answer", put(save_standard_answer).get(get_standard_answer))
         .route("/api/answers", post(submit_answers).get(list_answers))
-        // 推理型端点加并发限制：模型会话为受限并发资源（配合 RUBRICSPAN_SESSION_POOL），
-        // 超发只会把请求堆在 spawn_blocking 线程池里空转（占满阻塞线程池还会饿死
-        // 其他端点）。限制可调：RUBRICSPAN_INFER_CONCURRENCY（默认 4），保证队列有界、公平。
+        // 推理型端点加并发限制
         .route("/api/ocr", post(run_ocr).layer(tower::limit::ConcurrencyLimitLayer::new(infer_concurrency)))
         .route("/api/score", post(score).layer(tower::limit::ConcurrencyLimitLayer::new(infer_concurrency)))
         .route("/api/results", get(query_results))
@@ -66,11 +68,30 @@ pub fn router(state: AppState) -> Router {
         .route("/api/admin/stats", get(admin_stats))
         .route("/api/admin/config", get(admin_config))
         .route("/api/admin/scoring-settings", get(get_scoring_settings).put(set_scoring_settings))
-        .layer(
-            // 前端（localhost:3000）与网关跨端口直连，本地服务放开 CORS
-            tower_http::cors::CorsLayer::permissive(),
-        )
-        .with_state(Arc::new(state))
+        .route("/api/questions/{question_id}", delete(delete_question_handler))
+        .route("/api/answers/{answer_id}", delete(delete_answer_handler))
+        .route("/api/projects", get(list_projects).post(create_project))
+        .route("/api/projects/{project_id}", get(get_project).delete(delete_project_handler))
+        .route("/api/projects/{project_id}/questions", get(list_project_questions))
+        .layer(tower_http::cors::CorsLayer::permissive())
+        .with_state(Arc::new(state));
+
+    // 管理后台静态文件服务（由 frontend-admin/ 构建，Rust 直接托管，无需 Node.js）
+    // 通过 fallback_service 接管所有非 API 路由，使导航链接（如 /questions/）直接生效
+    if let Some(dir) = admin_dir {
+        if dir.exists() {
+            tracing::info!(admin_dir = %dir.display(), "管理后台接管根路由 fallback（导航链接可直接使用）");
+            app = app
+                // /admin 和 /admin/ 重定向到根路由（兼容旧书签）
+                .route("/admin", get(|| async { Redirect::permanent("/") }))
+                .route("/admin/", get(|| async { Redirect::permanent("/") }))
+                .fallback_service(ServeDir::new(&dir).append_index_html_on_directories(true));
+        } else {
+            tracing::warn!(admin_dir = %dir.display(), "管理后台目录不存在，跳过静态文件挂载");
+        }
+    }
+
+    app
 }
 
 // ---------------------------------------------------------------------------
@@ -86,6 +107,8 @@ struct QuestionCreate {
     total_score: f64,
     #[serde(default)]
     standard_answer_text: Option<String>,
+    #[serde(default)]
+    project_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -169,9 +192,9 @@ async fn admin_config(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         "ocr": {
             "enabled": state.ocr.is_some(),
             "note": if state.ocr.is_some() {
-                "RapidOCR（Rust 侧推理 · M8.1 恢复）"
+                "已就绪"
             } else {
-                "OCR 引擎未加载（模型目录缺失或下载失败），请检查 --ocr-models-dir 与启动日志"
+                "OCR 引擎未加载，请检查 --ocr-models-dir 与启动日志"
             }
         },
     }))
@@ -246,6 +269,7 @@ async fn create_question(
         .unwrap_or_else(|| format!("Q{:03}", existing + 1));
     let q = rubricspan_storage::Question {
         question_id: qid.clone(),
+        project_id: body.project_id,
         content: body.content,
         subject: body.subject,
         total_score: body.total_score,
@@ -368,12 +392,12 @@ async fn run_ocr(
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
-    // M8.1 恢复：Rust 侧 RapidOCR 推理（无 Python）。请求体为图片二进制，
+    // Rust 侧 RapidOCR 推理。请求体为图片二进制，
     // 试题标识走 X-Question-Id 头（与前端 api.ts ocrImage 契约一致）。
     let Some(engine) = state.ocr.clone() else {
         return err(
             StatusCode::NOT_IMPLEMENTED,
-            "OCR 引擎未加载（模型目录缺失或下载失败），请检查 --ocr-models-dir 与启动日志",
+            "OCR 引擎未加载，请检查 --ocr-models-dir 与启动日志",
         );
     };
     let qid = match headers.get("x-question-id").and_then(|v| v.to_str().ok()) {
@@ -439,12 +463,26 @@ async fn score(
     let backend = state.backend.clone();
     let scoring_settings = *state.scoring_settings.read().await;
     let items_for_score = items.clone();
+    // 题干剥离：答卷（含 OCR 来源）在进入评分前剔除与题干原文重合的长片段，
+    // 防止抽取与相似度兜底"忠于题干"（原始答卷文本仍完整落库，便于审计）。
+    let question_stem = state
+        .storage
+        .get_question(&body.question_id)
+        .await
+        .map(|q| q.content)
+        .unwrap_or_default();
 
     // 纯 CPU 评分：无存储访问，放 spawn_blocking 避免阻塞 tokio 工作线程
     let scored = spawn_blocking(move || -> anyhow::Result<Vec<(String, ScoreOutcome, Option<f64>)>> {
         let mut out = Vec::new();
+        let stems: Vec<&str> = if question_stem.is_empty() {
+            Vec::new()
+        } else {
+            vec![question_stem.as_str()]
+        };
         for (aid, ans, ocr_conf) in &items_for_score {
             let text = ans.ocr_text.clone().or(ans.answer_text.clone()).unwrap_or_default();
+            let text = strip_stem_spans(&text, &stems);
             let outcome = score_answer_configured(&cfg, &text, backend.as_ref(), *ocr_conf, scoring_settings)?;
             out.push((aid.clone(), outcome, *ocr_conf));
         }
@@ -512,6 +550,92 @@ async fn query_results(
     let cls = q.get("class_name").cloned();
     let items = state.storage.list_results(qid.as_deref(), cls.as_deref()).await;
     Json(json!({ "items": items, "total": items.len() })).into_response()
+}
+
+// ---------------------------------------------------------------------------
+// 删除（管理后台 CRUD）
+// ---------------------------------------------------------------------------
+
+async fn delete_question_handler(
+    State(state): State<Arc<AppState>>,
+    Path(question_id): Path<String>,
+) -> impl IntoResponse {
+    match state.storage.delete_question(&question_id).await {
+        Ok(_) => Json(json!({ "status": "deleted", "question_id": question_id })).into_response(),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+
+async fn delete_answer_handler(
+    State(state): State<Arc<AppState>>,
+    Path(answer_id): Path<String>,
+) -> impl IntoResponse {
+    match state.storage.delete_answer(&answer_id).await {
+        Ok(_) => Json(json!({ "status": "deleted", "answer_id": answer_id })).into_response(),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 工程（Project）
+// ---------------------------------------------------------------------------
+
+async fn list_projects(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let items = state.storage.list_projects().await;
+    Json(json!({ "items": items, "total": items.len() }))
+}
+
+async fn create_project(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let project_id = body.get("project_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let project_id = if project_id.is_empty() {
+        format!("P{:03}", state.storage.list_projects().await.len() + 1)
+    } else {
+        project_id
+    };
+    let p = rubricspan_storage::Project {
+        project_id,
+        name: body["name"].as_str().unwrap_or("").to_string(),
+        description: body.get("description").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        subject: body.get("subject").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        created_at: now_rfc3339(),
+        status: "active".to_string(),
+    };
+    match state.storage.save_project(p.clone()).await {
+        Ok(_) => Json(p).into_response(),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+
+async fn get_project(
+    State(state): State<Arc<AppState>>,
+    Path(project_id): Path<String>,
+) -> impl IntoResponse {
+    match state.storage.get_project(&project_id).await {
+        Some(p) => Json(p).into_response(),
+        None => err(StatusCode::NOT_FOUND, "工程不存在"),
+    }
+}
+
+async fn delete_project_handler(
+    State(state): State<Arc<AppState>>,
+    Path(project_id): Path<String>,
+) -> impl IntoResponse {
+    match state.storage.delete_project(&project_id).await {
+        Ok(_) => Json(json!({ "status": "deleted" })).into_response(),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+
+async fn list_project_questions(
+    State(state): State<Arc<AppState>>,
+    Path(project_id): Path<String>,
+) -> impl IntoResponse {
+    let all = state.storage.list_questions(None).await;
+    let items: Vec<_> = all.into_iter().filter(|q| q.project_id.as_deref() == Some(&project_id)).collect();
+    Json(json!({ "items": items, "total": items.len() }))
 }
 
 // ---------------------------------------------------------------------------

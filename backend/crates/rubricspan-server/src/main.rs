@@ -57,6 +57,11 @@ struct Args {
     /// OCR 模型目录（det/rec 资产与字典；缺省用 `<models_dir>/ocr`，首次启动自动下载）
     #[arg(long)]
     ocr_models_dir: Option<PathBuf>,
+
+    /// 管理后台静态文件目录（如 `../frontend-admin/out`）；缺省用 `../frontend-admin/out`，
+    /// 目录不存在时静默跳过（仅 API 模式）。
+    #[arg(long, default_value = "../frontend-admin/out")]
+    admin_dir: PathBuf,
 }
 
 /// 脱敏 MySQL 连接串：`mysql://user:pass@host/db` → `mysql://user:***@host/db`（口令不出现在管理后台）。
@@ -216,7 +221,7 @@ fn main() -> anyhow::Result<()> {
             scoring_settings,
             scoring_settings_path,
         };
-        let app = routes::router(state);
+        let app = routes::router(state, Some(args.admin_dir));
         let listener = tokio::net::TcpListener::bind(&args.listen).await?;
         tracing::info!(listen = %args.listen, "rubricspan-server listening");
         axum::serve(listener, app).await?;

@@ -16,8 +16,17 @@ use crate::{compute_stats, AdminStats, Answer, ConfigStatus, Question, ScoreReco
 
 /// 共享 DDL（幂等）。MySQL 的 TEXT 列不能有 DEFAULT，故状态列统一用 VARCHAR(32)。
 const SCHEMA: &str = r#"
+CREATE TABLE IF NOT EXISTS projects (
+  project_id VARCHAR(191) PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  subject TEXT,
+  created_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active'
+);
 CREATE TABLE IF NOT EXISTS questions (
   question_id VARCHAR(191) PRIMARY KEY,
+  project_id VARCHAR(191),
   content TEXT NOT NULL,
   subject TEXT NOT NULL,
   total_score REAL NOT NULL,
@@ -61,11 +70,13 @@ const INDEXES: [&str; 2] = [
 ];
 
 const Q_COLUMNS: &str =
-    "question_id, content, subject, total_score, standard_answer_text, config_status";
+    "question_id, project_id, content, subject, total_score, standard_answer_text, config_status";
 const A_COLUMNS: &str =
     "answer_id, question_id, student_id, class_name, answer_text, source, ocr_text";
 const R_COLUMNS: &str =
     "answer_id, question_id, student_id, class_name, total_score, max_score, rating, point_details, ocr_confidence";
+const P_COLUMNS: &str =
+    "project_id, name, description, subject, created_at, status";
 
 // ---------------------------------------------------------------------------
 // 行映射（FromRow derive 对任意 sqlx::Row 生效，两库共用）
@@ -74,6 +85,7 @@ const R_COLUMNS: &str =
 #[derive(FromRow)]
 struct QuestionRow {
     question_id: String,
+    project_id: Option<String>,
     content: String,
     subject: String,
     total_score: f64,
@@ -105,10 +117,21 @@ struct ScoreRow {
     ocr_confidence: Option<f64>,
 }
 
+#[derive(FromRow)]
+struct ProjectRow {
+    project_id: String,
+    name: String,
+    description: Option<String>,
+    subject: Option<String>,
+    created_at: String,
+    status: String,
+}
+
 impl From<QuestionRow> for Question {
     fn from(r: QuestionRow) -> Self {
         Question {
             question_id: r.question_id,
+            project_id: r.project_id,
             content: r.content,
             subject: r.subject,
             total_score: r.total_score,
@@ -144,6 +167,19 @@ impl From<ScoreRow> for ScoreRecord {
             rating: r.rating,
             point_details: serde_json::from_str(&r.point_details).unwrap_or_else(|_| serde_json::json!([])),
             ocr_confidence: r.ocr_confidence,
+        }
+    }
+}
+
+impl From<ProjectRow> for crate::Project {
+    fn from(r: ProjectRow) -> Self {
+        crate::Project {
+            project_id: r.project_id,
+            name: r.name,
+            description: r.description,
+            subject: r.subject,
+            created_at: r.created_at,
+            status: r.status,
         }
     }
 }
@@ -208,7 +244,7 @@ impl SqlStore<sqlx::sqlite::Sqlite> {
     /// 清空全部业务表（测试用）。
     #[cfg(test)]
     pub(crate) async fn clear(&self) -> Result<()> {
-        for t in ["questions", "configs", "answers", "results", "ocr"] {
+        for t in ["questions", "configs", "answers", "results", "ocr", "projects"] {
             sqlx::query(&format!("DELETE FROM {t}"))
                 .execute(&self.pool)
                 .await
@@ -233,7 +269,7 @@ impl SqlStore<sqlx::mysql::MySql> {
     /// 清空全部业务表（测试用）。
     #[cfg(test)]
     pub(crate) async fn clear(&self) -> Result<()> {
-        for t in ["questions", "configs", "answers", "results", "ocr"] {
+        for t in ["questions", "configs", "answers", "results", "ocr", "projects"] {
             sqlx::query(&format!("DELETE FROM {t}"))
                 .execute(&self.pool)
                 .await
@@ -258,9 +294,10 @@ macro_rules! impl_storage_sql {
                     .execute(&mut *tx)
                     .await?;
                 sqlx::query(&format!(
-                    "INSERT INTO questions ({Q_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)"
+                    "INSERT INTO questions ({Q_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?)"
                 ))
                 .bind(&q.question_id)
+                .bind(&q.project_id)
                 .bind(&q.content)
                 .bind(&q.subject)
                 .bind(q.total_score)
@@ -480,6 +517,81 @@ macro_rules! impl_storage_sql {
                 let answers = self.list_answers(None).await;
                 let results = self.list_results(None, None).await;
                 compute_stats(&questions, answers.len(), &results)
+            }
+
+            async fn delete_question(&self, id: &str) -> Result<()> {
+                let mut tx = self.pool.begin().await?;
+                sqlx::query("DELETE FROM results WHERE question_id = ?")
+                    .bind(id).execute(&mut *tx).await?;
+                sqlx::query("DELETE FROM answers WHERE question_id = ?")
+                    .bind(id).execute(&mut *tx).await?;
+                sqlx::query("DELETE FROM configs WHERE question_id = ?")
+                    .bind(id).execute(&mut *tx).await?;
+                sqlx::query("DELETE FROM questions WHERE question_id = ?")
+                    .bind(id).execute(&mut *tx).await?;
+                sqlx::query("DELETE FROM ocr WHERE question_id = ?")
+                    .bind(id).execute(&mut *tx).await?;
+                tx.commit().await?;
+                Ok(())
+            }
+
+            async fn delete_answer(&self, id: &str) -> Result<()> {
+                let mut tx = self.pool.begin().await?;
+                sqlx::query("DELETE FROM results WHERE answer_id = ?")
+                    .bind(id).execute(&mut *tx).await?;
+                sqlx::query("DELETE FROM answers WHERE answer_id = ?")
+                    .bind(id).execute(&mut *tx).await?;
+                tx.commit().await?;
+                Ok(())
+            }
+
+            async fn save_project(&self, p: crate::Project) -> Result<()> {
+                let mut tx = self.pool.begin().await?;
+                sqlx::query("DELETE FROM projects WHERE project_id = ?")
+                    .bind(&p.project_id).execute(&mut *tx).await?;
+                sqlx::query(&format!(
+                    "INSERT INTO projects ({P_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)"
+                ))
+                .bind(&p.project_id)
+                .bind(&p.name)
+                .bind(&p.description)
+                .bind(&p.subject)
+                .bind(&p.created_at)
+                .bind(&p.status)
+                .execute(&mut *tx).await?;
+                tx.commit().await?;
+                Ok(())
+            }
+
+            async fn list_projects(&self) -> Vec<crate::Project> {
+                sqlx::query_as::<_, ProjectRow>(&format!("SELECT {P_COLUMNS} FROM projects ORDER BY created_at DESC"))
+                    .fetch_all(&self.pool).await.unwrap_or_default()
+                    .into_iter().map(crate::Project::from).collect()
+            }
+
+            async fn get_project(&self, id: &str) -> Option<crate::Project> {
+                sqlx::query_as::<_, ProjectRow>(&format!("SELECT {P_COLUMNS} FROM projects WHERE project_id = ?"))
+                    .bind(id).fetch_optional(&self.pool).await.ok()
+                    .flatten()
+                    .map(crate::Project::from)
+            }
+
+            async fn delete_project(&self, id: &str) -> Result<()> {
+                let mut tx = self.pool.begin().await?;
+                sqlx::query("DELETE FROM results WHERE question_id IN (SELECT question_id FROM questions WHERE project_id = ?)")
+                    .bind(id).execute(&mut *tx).await?;
+                sqlx::query("DELETE FROM answers WHERE question_id IN (SELECT question_id FROM questions WHERE project_id = ?)")
+                    .bind(id).execute(&mut *tx).await?;
+                sqlx::query("DELETE FROM configs WHERE question_id IN (SELECT question_id FROM questions WHERE project_id = ?)")
+                    .bind(id).execute(&mut *tx).await?;
+                sqlx::query("DELETE FROM ocr WHERE question_id IN (SELECT question_id FROM questions WHERE project_id = ?)")
+                    .bind(id).execute(&mut *tx).await?;
+                sqlx::query("DELETE FROM questions WHERE project_id = ?")
+                    .bind(id).execute(&mut *tx).await?;
+                sqlx::query("DELETE FROM projects WHERE project_id = ?")
+                    .bind(id).execute(&mut *tx).await?;
+                tx.commit().await?;
+                Ok(())
             }
         }
     };
