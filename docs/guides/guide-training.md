@@ -35,11 +35,26 @@ python -m rubricspan_train.labeling.run {parse-points|synth|label|selfcheck|qual
 python -m rubricspan_train.data.build
 
 # M2 训练 / 评估 / 导出
-python -m rubricspan_train.training.train_mrc          # --stage bridge|main|both
+python -m rubricspan_train.training.train_mrc          # --stage bridge|main|both [--strip-stems]
 python -m rubricspan_train.training.train_similarity
 python -m rubricspan_train.evaluation.report [--onnx]
 python -m rubricspan_train.export.onnx export|verify|quantize
 ```
+
+### MRC 再训练 · 题干剥离口径（CC-006 训练侧）
+
+推理侧评分入口在评分前剥离答卷中与题干重合的长片段（CC-006），因此**再训练时
+应加 `--strip-stems`**，让训练 context 与推理输入同源净化，避免模型学到
+"从题干材料里抽答案"：
+
+- 实现 `train/rubricspan_train/training/stem_strip.py`——Rust
+  `strip_stem_spans` 的 Python 端口（归一化 ≥8 字片段空格替代，字符索引稳定，
+  `answer_start/end` 无需重新定位）；与 Rust 版同源对拍测试
+  `train/tests/test_stem_strip.py`（7 例，改任一侧须同步另一侧）；
+- 守卫：金标 answer 区间被整段清空的数据矛盾行保持原样（实测 train 6 行——
+  均为"答案引用材料原文词句"类，可另行仲裁剔除）；
+- 实测 mrc_train 24% 行、mrc_val 28% 行的 context 含题干污染，剥离前后指标
+  变化以再训练对拍为准。
 
 LLM 接入为**多端点 fallback 队列**：`.env` 配置
 `LLM_ENDPOINT_<n>_{BASE_URL,API_KEY,MODEL}`（升序即优先级），单端点故障自动切换、

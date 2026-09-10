@@ -1,7 +1,8 @@
 # 部署与运行手册（本地 GPU 环境）
 
-> 适用版本：M7 交付基线。所有命令默认在仓库根目录执行；
-> Windows + Git Bash 环境注意事项见 §6。
+> 适用版本：M8 交付基线。所有命令默认在仓库根目录执行；
+> Windows + Git Bash 环境注意事项见 §7。
+> 部署前请先确认环境达标：参见 [环境要求检查单](/guides/environment-checklist)。
 
 ## 1. 交付物清单
 
@@ -44,16 +45,42 @@ cd frontend && npm install && npm run build && npm start   # :3000
 
 MySQL 连接串与 `DATABASE_URL` 优先级：`--db-url` 优先于环境变量；管理后台 `/api/admin/config` 的 `store_path` 已自动脱敏（口令以 `***` 呈现）。
 
+### 容器化部署（Docker Compose · MySQL 生产档）
+
+`backend/deploy/docker-compose.yml` 提供 MySQL 8.4 + 在线服务的完整编排（CPU 档；
+GPU 需宿主侧 NVIDIA Container Toolkit + 换 runtime 基础镜像）：
+
+```bash
+# 0. 前置：models/{mrc,similarity,ocr} 权重就位（见 environment-checklist）；
+#    管理后台静态导出放 ./admin（frontend-admin/out 构建产物，可留空跳过）
+# 1. 构建镜像（多阶段：rust 构建 → slim 运行时，仅含 CA 证书）
+docker compose -f backend/deploy/docker-compose.yml build
+# 2. 启动（先等 mysql 健康检查通过）
+docker compose -f backend/deploy/docker-compose.yml up -d
+# 3. 验证
+curl http://127.0.0.1:8080/api/health   # mode=online 且 models.mrc/similarity 均为 true
+```
+
+- 服务端 CLI 参数默认指向容器内挂载点：`--models-dir /app/models`、`--admin-dir /app/admin`；
+  存储由环境变量驱动（`RUBRICSPAN_STORAGE` / `DATABASE_URL`），未设时回落 sqlite 单机模式。
+- 数据目录 `./data` 挂载保持评分设置等落盘持久化；MySQL 数据在 `mysql_data` 卷。
+- 口令经 `.env` 或环境注入，勿写入 compose 文件提交（示例值仅限本地开发）。
+
 ### 关键环境变量
 
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `RUBRICSPAN_FORCE_CPU` | 未设 | 设 1 时 ONNX 仅用 CPU EP（GPU 显存被训练占用时使用） |
-| `RUBRICSPAN_MRC_THRESHOLD` | 0.5 | MRC has_answer 判定阈值；调优实验见 M7 评审 |
 | `RUBRICSPAN_MODEL_PRECISION` | fp32 | `int8` 选择量化模型（缺失自动回落 FP32） |
 | `DATABASE_URL` | 无 | `--storage mysql` 时作为 `--db-url` 的回落值 |
 | `RUBRICSPAN_OCR_MODEL_SET` | `ppocrv6-small` | OCR 模型集（见 `rapidocr-core` 注册表，如 `ppocrv5-ch-mobile`） |
 | `RUBRICSPAN_OCR_EP` | `directml`（GPU） | OCR 推理执行提供器：默认 DirectX 12 GPU（不依赖 CUDA 运行库）；设 `cpu` 强制 CPU |
+
+> 评分参数（τ_hi/τ_lo/γ/θ）不是环境变量，而是**运行时参数**：经管理后台
+> `GET/PUT /api/admin/scoring-settings` 调整，持久化于 `<store_path>/scoring_settings.json`；
+> 出厂默认 0.95 / 0.90 / 0.25 / 0.8（2026-09 从严收紧）。评分入口同时强制执行题干剥离
+> （原始答卷保留落库）。依据与对照数据见 [部署改进对照报告](/reports/deploy-improvement)；
+> M7 时代的 `RUBRICSPAN_MRC_THRESHOLD` 已随 Python 运行时移除而废止。
 
 ## 3. 试卷图片识别（RapidOCR · Rust 侧，M8.1 恢复）
 

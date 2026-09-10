@@ -27,6 +27,7 @@ export default defineConfig({
         text: '上手',
         items: [
           { text: '入门教程 · 快速开始', link: '/guides/getting-started' },
+          { text: '环境要求检查单', link: '/guides/environment-checklist' },
         ],
       },
       {
@@ -55,6 +56,7 @@ export default defineConfig({
         text: '评估与产物报告',
         items: [
           { text: '全链路评估报告', link: '/reports/m7-eval-report' },
+          { text: '部署改进对照（题干剥离+从严）', link: '/reports/deploy-improvement' },
           { text: '仲裁清单（BC-002）', link: '/reports/arbitration-sheet' },
           { text: 'ONNX 一致性校验', link: '/reports/m2-onnx-consistency' },
           { text: 'INT8 量化对比', link: '/reports/m2-int8-quantization' },
