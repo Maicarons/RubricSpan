@@ -558,7 +558,7 @@ impl OrtBackend {
             let mut vec = vec![0.0f64; SIM_DIM];
             if denom > 0.0 {
                 let row = &data[i * max_len * SIM_DIM..(i * max_len + real) * SIM_DIM];
-                for chunk in row.chunks_exact(SIM_DIM) {
+                for chunk in row.as_chunks::<{ SIM_DIM }>().0 {
                     for (v, &x) in vec.iter_mut().zip(chunk) {
                         *v += x as f64;
                     }
