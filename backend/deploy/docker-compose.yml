@@ -1,0 +1,51 @@
+# RubricSpan 生产部署（MySQL 后端 · CPU 档）
+#
+# 用法：
+#   1. 准备模型权重到 ./models/{mrc,similarity,ocr}（见 docs/guides/environment-checklist.md）
+#   2. 构建管理后台静态导出到 ./admin（frontend-admin/out，或置空跳过）
+#   3. docker compose up -d --build
+#
+# GPU 加速：注释掉 cpu 相关配置，接入 NVIDIA Container Toolkit 并将
+# backend/Dockerfile 的 runtime 基础镜像换成带 CUDA/cuDNN 的镜像。
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: rubricspan-mysql
+    environment:
+      MYSQL_DATABASE: rubricspan
+      MYSQL_USER: rubricspan
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-rubricspan_dev}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_dev_only}
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  server:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: rubricspan-server
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      RUBRICSPAN_STORAGE: mysql
+      DATABASE_URL: mysql://rubricspan:${MYSQL_PASSWORD:-rubricspan_dev}@mysql:3306/rubricspan
+      RUBRICSPAN_FORCE_CPU: "1"
+      RUBRICSPAN_MODEL_PRECISION: ${RUBRICSPAN_MODEL_PRECISION:-fp32}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./models:/app/models:ro      # 模型权重（mrc/similarity/ocr）
+      - ./admin:/app/admin:ro        # 管理后台静态导出（frontend-admin/out）
+      - ./data:/app/data             # 运行数据（sqlite/设置落盘）
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
