@@ -28,7 +28,36 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 MRC_TEST = ROOT / "data" / "processed" / "mrc_test.jsonl"
 CONFIGS = ROOT / "data" / "scoring_configs"
+SAS_RAW = ROOT / "data" / "raw" / "sas-bench"
 OUT_JSON = ROOT / "models" / "artifacts" / "e2e_eval.json"
+
+
+def build_stems() -> dict[str, str]:
+    """qid -> 该题全部来源题干（多来源以换行拼接）。
+
+    服务端在评分前会按题干剥离答卷中重合的题干材料片段（strip_stem_spans），
+    因此评测必须 POST 真实题干而非占位文本，与生产链路同构。
+    """
+    item2q: dict[str, str] = {}
+    for fp in SAS_RAW.glob("*.jsonl"):
+        with open(fp, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    item = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if item.get("id") and item.get("question"):
+                    item2q[item["id"]] = item["question"].strip()
+    stems: dict[str, set[str]] = defaultdict(set)
+    with open(MRC_TEST, encoding="utf-8") as f:
+        for line in f:
+            row = json.loads(line)
+            if row.get("origin") != "full":
+                continue
+            q = item2q.get(row["id"].split("#")[0])
+            if q:
+                stems[row["question_id"]].add(q)
+    return {qid: "\n".join(sorted(v)) for qid, v in stems.items()}
 
 
 def _assert_safe_runtime_url(url: str) -> None:
@@ -128,8 +157,11 @@ def main() -> int:
     args = ap.parse_args()
 
     answers = load_answers()
+    stems = build_stems()
     print(f"候选答案卷 {len(answers)} 份；抽样 {args.sample} 份（等距覆盖分数段）", flush=True)
     sample = stratified_sample(answers, args.sample)
+    n_stem = sum(1 for a in sample if a["question_id"] in stems)
+    print(f"题干剥离就绪：{n_stem}/{len(sample)} 卷有真实题干", flush=True)
 
     preds: list[float] = []
     golds: list[float] = []
@@ -153,7 +185,7 @@ def main() -> int:
         }
         try:
             http_json("POST", f"{args.gateway}/api/questions",
-                      {"question_id": eq, "content": f"E2E 评估题 {eq}",
+                      {"question_id": eq, "content": stems.get(ans["question_id"], f"E2E 评估题 {eq}"),
                        "subject": "eval", "total_score": reduced["total_score"]})
             http_json("PUT", f"{args.gateway}/api/standard-answer", reduced)
             sub = http_json("POST", f"{args.gateway}/api/answers",
