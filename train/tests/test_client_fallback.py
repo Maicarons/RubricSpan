@@ -95,6 +95,33 @@ class TestParseEndpoints:
         assert parse_endpoints({"LLM_TIMEOUT_SECS": "120"}) == []
 
 
+class TestLoadEnv:
+    def test_env_vars_override_dotenv(self, tmp_path, monkeypatch):
+        env_path = tmp_path / ".env"
+        env_path.write_text(
+            "LLM_ENDPOINT_1_BASE_URL=file\nLLM_ENDPOINT_1_API_KEY=k\nLLM_ENDPOINT_1_MODEL=m\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("LLM_ENDPOINT_1_BASE_URL", "env")
+        env = client_mod.load_env(env_path)
+        assert env["LLM_ENDPOINT_1_BASE_URL"] == "env"
+        assert env["LLM_ENDPOINT_1_MODEL"] == "m"
+
+    def test_missing_dotenv_ok_when_env_set(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENAI_BASE_URL", "b")
+        monkeypatch.setenv("OPENAI_API_KEY", "k")
+        monkeypatch.setenv("LABELING_MODEL", "m")
+        env = client_mod.load_env(tmp_path / "nonexistent.env")
+        assert parse_endpoints(env)[0].model == "m"
+
+    def test_empty_env_var_does_not_shadow_dotenv(self, tmp_path, monkeypatch):
+        env_path = tmp_path / ".env"
+        env_path.write_text("LLM_ENDPOINT_1_MODEL=m\n", encoding="utf-8")
+        monkeypatch.setenv("LLM_ENDPOINT_1_MODEL", "")
+        env = client_mod.load_env(env_path)
+        assert env["LLM_ENDPOINT_1_MODEL"] == "m"
+
+
 class TestFallbackQueue:
     def test_primary_failure_falls_back_every_call(self, monkeypatch):
         """无冷却：每次调用都先打队首端点（整轮重试）再落到下一个。"""

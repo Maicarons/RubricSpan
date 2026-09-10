@@ -72,15 +72,27 @@ def build_features(tokenizer, examples, max_length: int, drop_truncated_positive
     return feats
 
 
+def _amp_dtype() -> torch.dtype:
+    """bf16 仅 Ampere+（sm≥8.0）；无 CUDA 或 T4/P100 退 FP32 全精度。"""
+    if not torch.cuda.is_available():
+        return torch.float32
+    if torch.cuda.get_device_capability() >= (8, 0):
+        return torch.bfloat16
+    return torch.float32
+
+
 @torch.no_grad()
-def evaluate(model, loader, device) -> dict[str, float]:
+def evaluate(model, loader, device, amp_dtype: torch.dtype) -> dict[str, float]:
     model.eval()
     total_loss = total = 0
     span_correct = span_total = 0
     null_correct = null_total = 0
     for batch in loader:
         batch = {k: v.to(device) for k, v in batch.items()}
-        with torch.autocast("cuda", dtype=torch.bfloat16):
+        if amp_dtype != torch.float32:
+            with torch.autocast("cuda", dtype=amp_dtype):
+                out = model(**batch)
+        else:
             out = model(**batch)
         total_loss += out.loss.item()
         total += 1
@@ -103,6 +115,25 @@ def evaluate(model, loader, device) -> dict[str, float]:
     }
 
 
+def _strip_examples(examples: list, stem_map: dict[str, str], strip_fn) -> int:
+    """对 origin=full 行按题干剥离 context；金标 answer 区间被整段清空的矛盾行保持原样。"""
+    changed = 0
+    for ex in examples:
+        if ex.origin != "full" or not ex.uid:
+            continue
+        stem = stem_map.get(ex.uid.split("#")[0], "")
+        if not stem:
+            continue
+        before = ex.context
+        after = strip_fn(before, [stem])
+        if after != before:
+            if ex.answer_start >= 0 and ex.answer_end > ex.answer_start and not after[ex.answer_start:ex.answer_end + 1].strip():
+                continue  # 数据矛盾：金标区间被剥离，保留原样
+            ex.context = after
+            changed += 1
+    return changed
+
+
 def train(
     stage: str,
     *,
@@ -113,9 +144,12 @@ def train(
     max_length: int,
     seed: int,
     log: dict,
+    strip_stems: bool = False,
 ) -> None:
     torch.manual_seed(seed)
-    device = "cuda"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    amp_dtype = _amp_dtype()
+    log["amp_dtype"] = str(amp_dtype)
     tok = AutoTokenizer.from_pretrained(BACKBONE, use_fast=True)
 
     src = BACKBONE if stage == "bridge" or not BRIDGE_DIR.exists() else BRIDGE_DIR
@@ -134,6 +168,17 @@ def train(
         )
         val_examples = load_mrc_jsonl(DATA_DIR / "processed" / "mrc_val.jsonl")
         out_dir = MAIN_DIR
+
+    if strip_stems and stage != "bridge":
+        # 训练/推理口径一致：推理侧评分入口剥离题干（CC-006），训练 context 也同源剥离；
+        # 空格替代保持字符索引稳定，answer_start/end 无需重新定位。
+        from .stem_strip import build_stem_map, strip_stem_spans
+
+        stem_map = build_stem_map(DATA_DIR / "raw" / "sas-bench")
+        n_train = _strip_examples(train_examples, stem_map, strip_stem_spans)
+        n_val = _strip_examples(val_examples, stem_map, strip_stem_spans)
+        log["strip_stems"] = {"train_changed": n_train, "val_changed": n_val}
+        print(f"[{stage}] 题干剥离：train {n_train} 行、val {n_val} 行 context 被净化", flush=True)
 
     train_feats = build_features(tok, train_examples, max_length, drop_truncated_positive=True)
     val_feats = build_features(tok, val_examples, max_length, drop_truncated_positive=False)
@@ -162,7 +207,11 @@ def train(
         optim.zero_grad(set_to_none=True)
         for it, batch in enumerate(train_loader, 1):
             batch = {k: v.to(device) for k, v in batch.items()}
-            with torch.autocast("cuda", dtype=torch.bfloat16):
+            if amp_dtype != torch.float32:
+                with torch.autocast("cuda", dtype=amp_dtype):
+                    out = model(**batch)
+                    loss = out.loss / grad_accum
+            else:
                 out = model(**batch)
                 loss = out.loss / grad_accum
             loss.backward()
@@ -172,7 +221,7 @@ def train(
                 optim.step()
                 sched.step()
                 optim.zero_grad(set_to_none=True)
-        metrics = evaluate(model, val_loader, device)
+        metrics = evaluate(model, val_loader, device, amp_dtype)
         metrics["epoch_secs"] = round(time.time() - t0)
         metrics["train_loss"] = round(running / len(train_loader), 4)
         log["epochs"].append({f"epoch{epoch}": metrics})
@@ -200,6 +249,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--grad-accum", type=int, default=1)
     p.add_argument("--max-length", type=int, default=512)
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--strip-stems", action="store_true",
+                   help="main 阶段对训练/验证 context 做题干剥离（与推理侧 CC-006 口径一致）")
     args = p.parse_args(argv)
 
     stages = ["bridge", "main"] if args.stage == "both" else [args.stage]
@@ -216,7 +267,7 @@ def main(argv: list[str] | None = None) -> int:
         lr = args.lr or (3e-5 if stage == "bridge" else 2.5e-5)
         log.update({"epochs": epochs, "lr": lr})
         train(stage, epochs=epochs, lr=lr, batch=args.batch, grad_accum=args.grad_accum,
-              max_length=args.max_length, seed=args.seed, log=log)
+              max_length=args.max_length, seed=args.seed, log=log, strip_stems=args.strip_stems)
         summary[stage] = log
     out = MODELS_DIR / "artifacts" / "mrc" / "train_log.json"
     out.parent.mkdir(parents=True, exist_ok=True)

@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import json
+import os
 import random
 import re
 import threading
@@ -32,14 +33,18 @@ _ENDPOINT_RE = re.compile(r"^LLM_ENDPOINT_(\d+)_(BASE_URL|API_KEY|MODEL|NAME)$")
 
 
 def load_env(env_path: Path) -> dict[str, str]:
-    """极简 .env 读取（不引入 python-dotenv 依赖）。"""
-    env: dict[str, str] = {}
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        k, _, v = line.partition("=")
-        env[k.strip()] = v.strip()
+    """极简 .env 读取（不引入 python-dotenv 依赖）。
+
+    环境变量优先于 .env 文件（云端如 Kaggle Secrets 以环境变量注入，可无 .env 文件）。
+    """
+    env: dict[str, str] = {k: v for k, v in os.environ.items() if v}
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            env.setdefault(k.strip(), v.strip())
     return env
 
 

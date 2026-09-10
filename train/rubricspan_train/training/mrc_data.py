@@ -30,6 +30,7 @@ class MrcExample:
     context: str
     answer: str = ""
     answer_start: int = -1
+    answer_end: int = -1
     is_impossible: bool = False
     hit_type: str = "miss"
     origin: str = ""
@@ -68,6 +69,7 @@ def load_mrc_jsonl(path: Path, *, drop_option_points: bool = False) -> list[MrcE
                     context=r["context"],
                     answer=r.get("answer", ""),
                     answer_start=int(r.get("answer_start", -1)),
+                    answer_end=int(r.get("answer_end", -1)),
                     is_impossible=bool(r.get("is_impossible", False)),
                     hit_type=r.get("hit_type", "miss"),
                     origin=r.get("origin", ""),

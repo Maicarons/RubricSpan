@@ -77,6 +77,7 @@ def _export_bert(model, out_path: Path, example: dict, mode: str) -> None:
             },
             opset_version=OPSET,
             dynamo=False,
+            do_constant_folding=False,  # PyTorch 2.10+ 常量折叠可导致 LayerNormalization 类型混合
         )
     print(f"exported -> {out_path} ({out_path.stat().st_size / 1e6:.1f} MB)")
 
@@ -271,12 +272,24 @@ def cmd_quantize() -> None:
     for out_dir, prefix in ((MRC_OUT, "mrc"), (SIM_OUT, "similarity")):
         src = out_dir / "model.onnx"
         dst = out_dir / "model.int8.onnx"
-        quantize_dynamic(
-            str(src), str(dst),
-            weight_type=QuantType.QInt8,
-            per_channel=True,
-            extra_options={"EnableSubgraph": False},
-        )
+        try:
+            quantize_dynamic(
+                str(src), str(dst),
+                weight_type=QuantType.QInt8,
+                per_channel=True,
+                extra_options={"EnableSubgraph": False},
+            )
+        except AssertionError as e:
+            if "scale issue" in str(e):
+                print(f"per_channel=True 失败，降级 per_channel=False: {e}")
+                quantize_dynamic(
+                    str(src), str(dst),
+                    weight_type=QuantType.QInt8,
+                    per_channel=False,
+                    extra_options={"EnableSubgraph": False},
+                )
+            else:
+                raise
         print(f"int8 -> {dst} ({dst.stat().st_size / 1e6:.1f} MB, "
               f"fp32 {src.stat().st_size / 1e6:.1f} MB)")
 
