@@ -150,8 +150,15 @@ pub fn score_answer(
 ///   传入文本计算），再以剥离后的文本同时驱动推理与 `scoreAnswer`，与在线端同构。
 #[wasm_bindgen(js_name = stripStemSpans)]
 pub fn strip_stem_spans_js(stems_json: &str, student_answer: &str) -> Result<String, JsValue> {
+    strip_stem_spans_js_impl(stems_json, student_answer)
+        .map_err(|e| JsValue::from_str(&e))
+}
+
+/// `stripStemSpans` 的内部实现（可宿主单测；wasm-bindgen 导出函数在非 wasm 环境调用会 panic，
+/// 因此逻辑与导出分离，导出只做 JsValue 包装）。
+fn strip_stem_spans_js_impl(stems_json: &str, student_answer: &str) -> Result<String, String> {
     let stems: Vec<String> = serde_json::from_str(stems_json)
-        .map_err(|e| JsValue::from_str(&format!("题干列表不是合法 JSON 数组：{e}")))?;
+        .map_err(|e| format!("题干列表不是合法 JSON 数组：{e}"))?;
     let stem_refs: Vec<&str> = stems.iter().map(String::as_str).collect();
     Ok(rubricspan_scoring::strip_stem_spans(student_answer, &stem_refs))
 }
@@ -226,18 +233,18 @@ mod tests {
     #[test]
     fn strip_stem_js_empty_and_nonempty() {
         // 空数组：原文原样返回
-        assert_eq!(strip_stem_spans_js("[]", "任何答案").unwrap(), "任何答案");
+        assert_eq!(strip_stem_spans_js_impl("[]", "任何答案").unwrap(), "任何答案");
         // 非法 JSON：报错
-        assert!(strip_stem_spans_js("not-json", "答案").is_err());
+        assert!(strip_stem_spans_js_impl("not-json", "答案").is_err());
         // 题干长片段被替换为空格（长度不变，索引对齐）
         let stems = r#"["忽如一夜春风来，千树万树梨花开"]"#;
         let answer = "忽如一夜春风来，千树万树梨花开。诗人以梨花喻雪。";
-        let out = strip_stem_spans_js(stems, answer).unwrap();
+        let out = strip_stem_spans_js_impl(stems, answer).unwrap();
         assert_eq!(out.chars().count(), answer.chars().count());
         assert!(!out.contains("千树万树"));
         assert!(out.contains("诗人以梨花喻雪"));
         // 短于 8 字的偶然重合不剥离
-        let out = strip_stem_spans_js(r#"["春风"]"#, "春风吹又生").unwrap();
+        let out = strip_stem_spans_js_impl(r#"["春风"]"#, "春风吹又生").unwrap();
         assert_eq!(out, "春风吹又生");
     }
 }
