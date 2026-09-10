@@ -5,9 +5,11 @@
 | 子目录 | 内容 |
 |---|---|
 | `raw/` | 原始数据集（SAS-Bench、SAS-Datasets、CMRC 2018、DRCD、CESA 等，见 `raw/README.md`） |
+| `raw/extra_sources/` | 外部补充数据集（M3KE、InternLM-History 等，获取记录与许可见其 README 与 [extra-datasets 报告](../docs/reports/extra-datasets.md)） |
+| `raw/extra/` | 外部数据归一化产物（统一 schema，`import_extra` 产出，不入库） |
 | `synthetic/` | 大模型合成的四档水平学生答卷（M1-2 生成） |
 | `labeling_cache/` | 大模型打标中间产物：raw / voted / final 三级（M1-3~M1-6） |
-| `processed/` | 对齐后训练数据：MRC 五元组 + 相似度句子对 + 质检报告（M1 产出） |
+| `processed/` | 对齐后训练数据：MRC 五元组 + 相似度句子对 + 质检报告（M1 产出；`extra_*.jsonl` 为外部数据训练产物，opt-in 使用） |
 | `scoring_configs/` | 评分配置 JSON：M1 打标种子配置 + 运行时教师确认配置（`{question_id}.json`） |
 
 ## 约定

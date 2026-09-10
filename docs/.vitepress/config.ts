@@ -57,6 +57,7 @@ export default defineConfig({
         items: [
           { text: '全链路评估报告', link: '/reports/m7-eval-report' },
           { text: '部署改进对照（题干剥离+从严）', link: '/reports/deploy-improvement' },
+          { text: '外部补充数据集研究', link: '/reports/extra-datasets' },
           { text: '仲裁清单（BC-002）', link: '/reports/arbitration-sheet' },
           { text: 'ONNX 一致性校验', link: '/reports/m2-onnx-consistency' },
           { text: 'INT8 量化对比', link: '/reports/m2-int8-quantization' },

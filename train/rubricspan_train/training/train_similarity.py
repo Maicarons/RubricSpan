@@ -62,6 +62,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--warmup", type=float, default=0.1)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--eval-every", type=int, default=0, help="0 = 每 1/4 epoch 评估一次")
+    p.add_argument("--extra-pairs", type=Path, default=None,
+                   help="额外相似度句子对（data/processed/extra_similarity_pairs.jsonl，"
+                        "仅并入 train split；来源见 docs/reports/extra-datasets.md）")
     args = p.parse_args(argv)
 
     torch.manual_seed(args.seed)
@@ -70,6 +73,16 @@ def main(argv: list[str] | None = None) -> int:
     model = SentenceTransformer(str(BACKBONE), device=device)
     train = load_pairs(PROCESSED_DIR / "similarity_train.jsonl")
     val = load_pairs(PROCESSED_DIR / "similarity_val.jsonl")
+    if args.extra_pairs:
+        extra = []
+        with args.extra_pairs.open(encoding="utf-8") as f:
+            for line in f:
+                r = json.loads(line)
+                if r.get("split") == "train":
+                    s = min(max(float(r["score"]), 0.0), 1.0)
+                    extra.append(InputExample(texts=[r["sentence1"], r["sentence2"]], label=s))
+        print(f"额外句子对（train split）：+{len(extra)}（extra_similarity_pairs.jsonl）")
+        train = train + extra
     print(f"train pairs={len(train)} val pairs={len(val)}")
 
     def encode(labels_list: list[str]) -> torch.Tensor:

@@ -19,6 +19,9 @@ data/scoring_configs/**
 !data/**/*.example
 !data/**/*.example.json
 !data/**/*.template
+# 外部补充数据集目录：仅 README 入库（数据本身不入库）
+!data/raw/extra_sources/
+!data/raw/extra_sources/README.md
 
 models/artifacts/**
 models/int8/**

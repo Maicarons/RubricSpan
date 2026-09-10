@@ -36,6 +36,7 @@ class MrcExample:
     origin: str = ""
     question_id: str = ""
     point_weight: float = 0.0
+    split: str = ""
 
 
 # M8：选择型得分点（"选B得3分""断句正确项为B""第（1）题答案：C"）由
@@ -75,6 +76,7 @@ def load_mrc_jsonl(path: Path, *, drop_option_points: bool = False) -> list[MrcE
                     origin=r.get("origin", ""),
                     question_id=r.get("question_id", ""),
                     point_weight=float(r.get("point_weight", 0)),
+                    split=r.get("split", ""),
                 )
             )
     return out

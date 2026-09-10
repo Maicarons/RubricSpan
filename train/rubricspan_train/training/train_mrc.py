@@ -145,6 +145,7 @@ def train(
     seed: int,
     log: dict,
     strip_stems: bool = False,
+    extra_negatives: Path | None = None,
 ) -> None:
     torch.manual_seed(seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -168,6 +169,12 @@ def train(
         )
         val_examples = load_mrc_jsonl(DATA_DIR / "processed" / "mrc_val.jsonl")
         out_dir = MAIN_DIR
+        if extra_negatives:
+            extra = load_mrc_jsonl(extra_negatives)
+            n_train = sum(1 for e in extra if e.split == "train")
+            log["extra_negatives"] = {"file": str(extra_negatives), "train_rows": n_train}
+            train_examples = train_examples + [e for e in extra if e.split == "train"]
+            print(f"[{stage}] 外部 MRC 负例并入 train：+{n_train}（extra_mrc_negatives.jsonl）", flush=True)
 
     if strip_stems and stage != "bridge":
         # 训练/推理口径一致：推理侧评分入口剥离题干（CC-006），训练 context 也同源剥离；
@@ -251,6 +258,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--strip-stems", action="store_true",
                    help="main 阶段对训练/验证 context 做题干剥离（与推理侧 CC-006 口径一致）")
+    p.add_argument("--extra-negatives", type=Path, default=None,
+                   help="外部数据集 MRC is_impossible 负例（data/processed/extra_mrc_negatives.jsonl，"
+                        "仅并入 train；来源见 docs/reports/extra-datasets.md）")
     args = p.parse_args(argv)
 
     stages = ["bridge", "main"] if args.stage == "both" else [args.stage]
@@ -267,7 +277,8 @@ def main(argv: list[str] | None = None) -> int:
         lr = args.lr or (3e-5 if stage == "bridge" else 2.5e-5)
         log.update({"epochs": epochs, "lr": lr})
         train(stage, epochs=epochs, lr=lr, batch=args.batch, grad_accum=args.grad_accum,
-              max_length=args.max_length, seed=args.seed, log=log, strip_stems=args.strip_stems)
+              max_length=args.max_length, seed=args.seed, log=log, strip_stems=args.strip_stems,
+              extra_negatives=args.extra_negatives)
         summary[stage] = log
     out = MODELS_DIR / "artifacts" / "mrc" / "train_log.json"
     out.parent.mkdir(parents=True, exist_ok=True)

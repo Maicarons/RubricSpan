@@ -35,10 +35,25 @@ python -m rubricspan_train.labeling.run {parse-points|synth|label|selfcheck|qual
 python -m rubricspan_train.data.build
 
 # M2 训练 / 评估 / 导出
-python -m rubricspan_train.training.train_mrc          # --stage bridge|main|both [--strip-stems]
-python -m rubricspan_train.training.train_similarity
+python -m rubricspan_train.training.train_mrc          # --stage bridge|main|both [--strip-stems] [--extra-negatives PATH]
+python -m rubricspan_train.training.train_similarity   # [--extra-pairs PATH]
 python -m rubricspan_train.evaluation.report [--onnx]
 python -m rubricspan_train.export.onnx export|verify|quantize
+```
+
+### 外部补充数据集（2026-09，opt-in）
+
+M3KE / InternLM-History 已落地归一化与训练产物（体量、学科、去重、适配结论见
+[外部数据集研究报告](/reports/extra-datasets)）：
+
+```bash
+# 归一化原始数据 → data/raw/extra/（需先按 extra_sources/README 获取原始数据）
+python -m rubricspan_train.data.import_extra
+# 生成训练产物 → data/processed/extra_{similarity_pairs,mrc_negatives}.jsonl
+python -m rubricspan_train.data.extra_processed
+# 训练时显式启用（默认关闭，不扰动主 build 的固定种子/划分）
+python -m rubricspan_train.training.train_similarity --extra-pairs ../data/processed/extra_similarity_pairs.jsonl
+python -m rubricspan_train.training.train_mrc --stage main --strip-stems --extra-negatives ../data/processed/extra_mrc_negatives.jsonl
 ```
 
 ### MRC 再训练 · 题干剥离口径（CC-006 训练侧）
