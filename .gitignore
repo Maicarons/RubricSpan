@@ -145,3 +145,15 @@ models/ocr/**
 
 # ---------- 本地代理/助手工作区 ----------
 .zcode/
+.commandcode/
+
+# ---------- Mimosa 安全扫描工作区 ----------
+.mimosa/
+
+# ---------- 前端静态导出产物（由 Rust fallback 托管 / CI 构建生成） ----------
+/frontend/out/
+/frontend-admin/out/
+/frontend-admin/.next/
+
+# ---------- 论文稿（本地撰写，不入库） ----------
+paper/
