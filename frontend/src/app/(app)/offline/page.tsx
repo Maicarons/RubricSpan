@@ -77,6 +77,7 @@ const PRESET_ANSWERS = [
 type WasmModule = {
   default: () => Promise<void>;
   scoreAnswer: (configJson: string, answer: string, inferenceJson: string) => string;
+  stripStemSpans: (stemsJson: string, answer: string) => string;
   version: () => string;
 };
 
@@ -90,6 +91,7 @@ const HIT_LABEL: Record<string, string> = {
 export default function OfflinePage() {
   const [configText, setConfigText] = useState(PRESET_CONFIG);
   const [answer, setAnswer] = useState(PRESET_ANSWERS[0]);
+  const [stemsText, setStemsText] = useState("");
   const [log, setLog] = useState<string[]>([]);
   const [outcome, setOutcome] = useState<ScoreOutcome | null>(null);
   const [busy, setBusy] = useState(false);
@@ -147,6 +149,23 @@ export default function OfflinePage() {
     setBusy(true);
     setOutcome(null);
     try {
+      // ---- 第零步：题干剥离（与在线端评分入口同源净化）----
+      // 必须先于模型推理：MRC/相似度的 start/end 偏移相对传入文本计算，
+      // 剥离后的文本同时驱动推理与评分，索引对齐，与在线端逐分支一致。
+      let scoringText = answer;
+      const stems = stemsText
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (stems.length > 0) {
+        scoringText = wasm.stripStemSpans(JSON.stringify(stems), answer);
+        say(
+          scoringText !== answer
+            ? "题干剥离：命中 ≥8 字片段已替换为空格（长度不变，索引对齐）"
+            : "题干剥离：无 ≥8 字重合片段，原文不变",
+        );
+      }
+
       // ---- 第一步：JS 侧预计算全部模型推理（异步）----
       const candidates = new Set<string>();
       for (const p of cfg.points ?? []) {
@@ -157,18 +176,18 @@ export default function OfflinePage() {
       const mrc: Record<string, MrcResult> = {};
       for (let i = 0; i < list.length; i++) {
         say(`MRC 推理 ${i + 1}/${list.length}：「${list[i]}」…`);
-        mrc[list[i]] = await li.mrcExtract(list[i], answer);
+        mrc[list[i]] = await li.mrcExtract(list[i], scoringText);
       }
       const similarity: Record<string, { cosine: number }> = {};
       const pointTexts = [...new Set((cfg.points ?? []).map((p) => p.point_text))];
       for (let i = 0; i < pointTexts.length; i++) {
         say(`相似度推理 ${i + 1}/${pointTexts.length}：「${pointTexts[i]}」↔ 全文`);
-        similarity[pointTexts[i]] = { cosine: await li.similarity(pointTexts[i], answer) };
+        similarity[pointTexts[i]] = { cosine: await li.similarity(pointTexts[i], scoringText) };
       }
 
       // ---- 第二步：WASM 评分核心编排（同步，与在线端同一套 Rust 逻辑）----
       say("调用 WASM 评分核心 …");
-      const raw = wasm.scoreAnswer(configText, answer, JSON.stringify({ mrc, similarity }));
+      const raw = wasm.scoreAnswer(configText, scoringText, JSON.stringify({ mrc, similarity }));
       const result = JSON.parse(raw) as ScoreOutcome;
       setOutcome(result);
       say(`评分完成：${result.total_score}/${result.max_score}（${result.rating}）`);
@@ -177,7 +196,7 @@ export default function OfflinePage() {
     } finally {
       setBusy(false);
     }
-  }, [answer, busy, configText, say]);
+  }, [answer, busy, configText, say, stemsText]);
 
   return (
     <>
@@ -231,6 +250,22 @@ export default function OfflinePage() {
               rows={4}
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
+            />
+          </Card>
+
+          {/* 题干（可选，剥离参考） */}
+          <Card className="p-4">
+            <CardHeader
+              title="题干 / 材料（可选）"
+              desc="每行一条。评分前剥离答卷中与题干重合 ≥8 字的片段（与在线端入口同源净化），防止「忠于题干」误报。"
+            />
+            <TextArea
+              className="mt-3 font-mono text-xs leading-relaxed"
+              aria-label="题干"
+              rows={3}
+              value={stemsText}
+              onChange={(e) => setStemsText(e.target.value)}
+              placeholder={"忽如一夜春风来，千树万树梨花开。\n（留空则不剥离，行为与旧版一致）"}
             />
           </Card>
 

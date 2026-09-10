@@ -139,6 +139,23 @@ pub fn score_answer(
     serde_json::to_string(&outcome).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
+/// 从答案文本中剥离与任一题干文本重合的长片段（WASM 导出）。
+///
+/// 与在线端评分入口的前置净化（`rubricspan_scoring::preprocess::strip_stem_spans`）
+/// 同源同逻辑：归一化（忽略空白/标点/序号数字/①类注释上标）意义下，剔除与题干
+/// 重合的 ≥8 字片段，空格替代保持字符索引与片段掩码语义稳定。
+///
+/// - `stems_json`：题干文本数组 JSON（如 `["材料一……", "设问句……"]`）；空数组不剥离；
+/// - **JS 侧必须在预计算模型推理之前先剥离**（MRC/相似度的 start/end 偏移相对
+///   传入文本计算），再以剥离后的文本同时驱动推理与 `scoreAnswer`，与在线端同构。
+#[wasm_bindgen(js_name = stripStemSpans)]
+pub fn strip_stem_spans_js(stems_json: &str, student_answer: &str) -> Result<String, JsValue> {
+    let stems: Vec<String> = serde_json::from_str(stems_json)
+        .map_err(|e| JsValue::from_str(&format!("题干列表不是合法 JSON 数组：{e}")))?;
+    let stem_refs: Vec<&str> = stems.iter().map(String::as_str).collect();
+    Ok(rubricspan_scoring::strip_stem_spans(student_answer, &stem_refs))
+}
+
 /// 构建信息：前端可用于自检 WASM 模块加载成功。
 #[wasm_bindgen(js_name = version)]
 pub fn version() -> String {
@@ -204,5 +221,23 @@ mod tests {
         let bridge = BrowserBridge { pre };
         assert!(bridge.mrc_extract("不存在", "答案").is_err());
         assert!(bridge.similarity("不存在", "答案").is_err());
+    }
+
+    #[test]
+    fn strip_stem_js_empty_and_nonempty() {
+        // 空数组：原文原样返回
+        assert_eq!(strip_stem_spans_js("[]", "任何答案").unwrap(), "任何答案");
+        // 非法 JSON：报错
+        assert!(strip_stem_spans_js("not-json", "答案").is_err());
+        // 题干长片段被替换为空格（长度不变，索引对齐）
+        let stems = r#"["忽如一夜春风来，千树万树梨花开"]"#;
+        let answer = "忽如一夜春风来，千树万树梨花开。诗人以梨花喻雪。";
+        let out = strip_stem_spans_js(stems, answer).unwrap();
+        assert_eq!(out.chars().count(), answer.chars().count());
+        assert!(!out.contains("千树万树"));
+        assert!(out.contains("诗人以梨花喻雪"));
+        // 短于 8 字的偶然重合不剥离
+        let out = strip_stem_spans_js(r#"["春风"]"#, "春风吹又生").unwrap();
+        assert_eq!(out, "春风吹又生");
     }
 }
