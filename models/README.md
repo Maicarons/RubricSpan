@@ -5,15 +5,15 @@
 > 整理生成厂库；后续下载脚本将按本索引拉取到本目录布局。
 > 目录规范遵守 [`../contracts/model-artifacts.md`](../contracts/model-artifacts.md)。
 
-## 厂库链接（HF / ModelScope 同名镜像；把 `USER` 换成你的用户名）
+## 厂库链接（HF / ModelScope 同名镜像；已发布（HF：Maicarons · MS：Mai2026））
 
 > 当前发布档：**1.0-flash**（已训练完成，待推送）。**1.0-pro**（全数据增强版）训练方案见
 > [train-1.0-pro 报告](../docs/reports/train-1.0-pro.md)，训练完成后并列发布。
 
 | 模型 | Hugging Face | ModelScope | 用途 |
 |---|---|---|---|
-| MRC 抽取（mengzi-bert 微调） | https://huggingface.co/{{USER}}/RubricSpan-mrc-1.0-flash | https://www.modelscope.cn/models/{{USER}}/RubricSpan-mrc-1.0-flash | 得分点片段抽取 |
-| 语义相似度（text2vec 微调） | https://huggingface.co/{{USER}}/RubricSpan-similarity-1.0-flash | https://www.modelscope.cn/models/{{USER}}/RubricSpan-similarity-1.0-flash | 第 2 阶段相似度兜底 |
+| MRC 抽取（mengzi-bert 微调） | https://huggingface.co/Maicarons/RubricSpan-mrc-1.0-flash | https://www.modelscope.cn/models/Mai2026/RubricSpan-mrc-1.0-flash | 得分点片段抽取 |
+| 语义相似度（text2vec 微调） | https://huggingface.co/Maicarons/RubricSpan-similarity-1.0-flash | https://www.modelscope.cn/models/Mai2026/RubricSpan-similarity-1.0-flash | 第 2 阶段相似度兜底 |
 
 ## 文件与校验（SHA-256 与厂库 model_card.json 一致）
 
