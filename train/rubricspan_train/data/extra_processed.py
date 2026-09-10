@@ -98,6 +98,38 @@ def build_similarity_pairs(rows: list[dict]) -> list[dict]:
                 pairs.append({"question_id": qid, "origin": "extra", "sentence1": q,
                               "sentence2": lb, "score": 0.0,
                               "source": "extra-internlm-history-neg", "split": split})
+        elif r["type"] in ("open", "fill"):
+            # 主观/默写题：题干（材料+设问）↔ 参考答案 = 语义正例（学生答案↔得分点同构）
+            ans = (r.get("answer_text") or "").strip()
+            if len(ans) < MIN_CHOICE_LEN or ans in q or len(q) < MIN_QUESTION_LEN:
+                continue
+            split = _split(r.get("split", "train"))
+            qid = f"EXT-{r['source']}-{r['qid']}"
+            pairs.append({"question_id": qid, "origin": "extra", "sentence1": q,
+                          "sentence2": ans[:300], "score": 1.0,
+                          "source": f"extra-{r['source']}-pos", "split": split})
+        elif r["type"] == "choice":
+            # 通用客观题：题干↔正确选项正例 / 题干↔错误选项 hard 负例
+            # （agieval/cmmlu/gaokao-bench 客观题；m3ke 在上方专用分支保证 dev 过滤）
+            if not r.get("answer_letter") or not r.get("choices"):
+                continue
+            choices = {k: v.strip() for k, v in r["choices"].items()
+                       if (v or "").strip() and len(v.strip()) >= MIN_CHOICE_LEN}
+            if not choices:
+                continue
+            pos_text = choices.get(r["answer_letter"], "")
+            split = _split(r.get("split", "train"))
+            qid = f"EXT-{r['source']}-{r['qid']}"
+            if pos_text and len(pos_text) >= MIN_CHOICE_LEN:
+                pairs.append({"question_id": qid, "origin": "extra", "sentence1": q,
+                              "sentence2": pos_text, "score": 1.0,
+                              "source": f"extra-{r['source']}-pos", "split": split})
+            for letter, text in choices.items():
+                if letter == r["answer_letter"]:
+                    continue
+                pairs.append({"question_id": qid, "origin": "extra", "sentence1": q,
+                              "sentence2": text, "score": 0.0,
+                              "source": f"extra-{r['source']}-neg", "split": split})
     return pairs
 
 
